@@ -2,6 +2,7 @@
 //! Contains everything used to build up protocols from scratch, only using the stdlib as
 //! a dependency.
 
+pub const ciphers = @import("ciphers.zig");
 pub const curves = @import("curves.zig");
 pub const ff = @import("ff.zig");
 pub const merlin = @import("merlin.zig");
@@ -20,6 +21,7 @@ const root = @import("root");
 pub const build_options: Options = if (@hasDecl(root, "zk_options")) root.zk_options else .{};
 
 test {
+    _ = ciphers;
     _ = curves;
     _ = ff;
     _ = merlin;
