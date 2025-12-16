@@ -152,8 +152,18 @@ pub fn Fp(comptime params: Params) type {
             return r;
         }
 
-        // TODO: hardcoded for bn254
+        /// Inverses the finite field element with Fermat's Little Theorem:
+        /// $$a^{p-1} \equiv 1 (\bmod p) \quad \text{for} \quad a \neq 0$$
+        /// so:
+        /// $$a^{p-2} \equiv a^{-1} (\bmod p)$$
+        ///
+        /// This holds for all non-zero elements of a prime field.
+        ///
+        /// TODO: consider returning ?Self for when `a.isZero()` returns true.
+        /// We probably don't want to hardcode an assert like this, although
+        /// a caller can always trivially check `isZero` themselves.
         pub fn inverse(a: Self) Self {
+            std.debug.assert(!a.isZero());
             return a.pow(order - 2);
         }
 
