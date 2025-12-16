@@ -34,6 +34,11 @@ jobs:
 
       - name: build-docs
         run: zig build docs
+
+      - name: run math.sh
+        run: |
+          cd zig-out/
+          ../docs/math.sh
       
       - name: upload
         uses: actions/upload-pages-artifact@v3
