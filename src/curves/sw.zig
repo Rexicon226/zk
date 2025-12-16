@@ -331,9 +331,9 @@ pub fn ShortWeierstrass(
             };
         }
 
-        /// Returns `2 * p`.
+        /// Returns $2 \cdot p$.
         ///
-        /// Jacobian coordinates cannot be doubled by simply `p + p`, we need
+        /// Jacobian coordinates cannot be doubled by simply $p + p$, we need
         /// to account for the "slope" of the curve to ensure the result lies on the curve.
         pub fn dbl(p: Self) Self {
             // Doubling zero just gives us zero. Return the point - if we return `.zero`, it might
