@@ -231,7 +231,7 @@ pub const Bn254 = struct {
         .{
             .a = .zero,
             .b = b: { // b = 3/(i + 9)
-                @setEvalBranchQuota(1_520);
+                @setEvalBranchQuota(1_600);
                 break :b Fp6.non_residue.inverse().mulBase(.int(3));
             },
         },

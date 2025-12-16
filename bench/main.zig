@@ -15,6 +15,7 @@ const Filter = enum {
     bulletproofs,
     ed25519,
     bn254,
+    chacha,
 
     fn run(b: Filter, f: Filter) bool {
         if (b == .all) return true;
@@ -50,6 +51,10 @@ pub fn main() !void {
 
     if (filter.run(.bn254)) {
         try bn254.run();
+    }
+
+    if (filter.run(.chacha)) {
+        try chacha.run();
     }
 }
 
@@ -212,6 +217,30 @@ const bn254 = struct {
         }
 
         log.info("Bn254 compute pairing with {d} pairs time: {D}", .{ valid.len / 2 / 192, total / iterations });
+    }
+};
+
+const chacha = struct {
+    const ChaCha = zk.ciphers.ChaCha;
+
+    const iterations = 1000;
+    const warmup = 100;
+
+    fn run() !void {
+        var total: u64 = 0;
+        for (0..iterations + warmup) |i| {
+            std.mem.doNotOptimizeAway(i);
+
+            var key: [32]u8 = @splat(0);
+            std.mem.writeInt(u64, key[0..8], i, .little);
+            var state: ChaCha(.twenty) = .init(key);
+
+            const start = now();
+            for (0..1024) |_| std.mem.doNotOptimizeAway(state.int());
+            if (i > warmup) total += now() - start;
+        }
+
+        log.info("ChaCha(20): squeeze 1024 * 64 bits: {D}", .{total / iterations});
     }
 };
 
