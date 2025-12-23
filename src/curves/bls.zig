@@ -6,7 +6,7 @@ const extensions = @import("../extensions.zig");
 const ShortWeierstrass = sw.ShortWeierstrass;
 const Field = ff.Fp;
 
-pub const Bls12_381 = struct {
+pub const BLS12_381 = struct {
     /// Seed of the bls12-381 curve
     const seed = -0xd201000000010000;
     /// $|x|$
@@ -145,12 +145,12 @@ test "add_g1" {
         var buffer: [256]u8 = undefined;
         const bytes = try std.fmt.hexToBytes(&buffer, case.input);
 
-        const lhs = try Bls12_381.eth.fromBytesG1(bytes[0..128], false);
-        const rhs = try Bls12_381.eth.fromBytesG1(bytes[128..256], false);
+        const lhs = try BLS12_381.eth.fromBytesG1(bytes[0..128], false);
+        const rhs = try BLS12_381.eth.fromBytesG1(bytes[128..256], false);
         const result = lhs.add(rhs);
 
         var out: [128]u8 = undefined;
-        Bls12_381.eth.toBytesG1(result, &out);
+        BLS12_381.eth.toBytesG1(result, &out);
 
         var expected_buffer: [128]u8 = undefined;
         const decoded = try std.fmt.hexToBytes(&expected_buffer, case.expected);
@@ -190,8 +190,8 @@ test "add_g1 failures" {
 
     const S = struct {
         fn runTest(bytes: []const u8) !void {
-            _ = try Bls12_381.eth.fromBytesG1(bytes[0..128], false);
-            _ = try Bls12_381.eth.fromBytesG1(bytes[128..256], false);
+            _ = try BLS12_381.eth.fromBytesG1(bytes[0..128], false);
+            _ = try BLS12_381.eth.fromBytesG1(bytes[128..256], false);
         }
     };
 
@@ -269,12 +269,12 @@ test "mul_g1" {
         var buffer: [160]u8 = undefined;
         const bytes = try std.fmt.hexToBytes(&buffer, case.input);
 
-        const lhs = try Bls12_381.eth.fromBytesG1(bytes[0..128], false);
+        const lhs = try BLS12_381.eth.fromBytesG1(bytes[0..128], false);
         const rhs: u256 = @bitCast(bytes[128..][0..32].*);
         const result = lhs.mulScalar(u256, @byteSwap(rhs));
 
         var out: [128]u8 = undefined;
-        Bls12_381.eth.toBytesG1(result.toAffine(), &out);
+        BLS12_381.eth.toBytesG1(result.toAffine(), &out);
 
         var expected_buffer: [128]u8 = undefined;
         const expected = try std.fmt.hexToBytes(&expected_buffer, case.expected);
