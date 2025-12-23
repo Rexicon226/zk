@@ -1,0 +1,11 @@
+.{
+    .name = .zk,
+    .version = "0.1.0",
+    .fingerprint = 0x4e693b53f5a7b4ac,
+    .paths = .{
+        "LICENSE",
+        "build.zig.zon",
+        "build.zig",
+        "src",
+    },
+}

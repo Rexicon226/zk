@@ -71,6 +71,12 @@ pub fn ShortWeierstrass(
             .y = .one,
             .z = .zero,
         };
+        pub const one: Self = .{
+            .x = .one,
+            .y = .one,
+            .z = .one,
+        };
+
         pub const A = params.a;
         const A_is_zero = A.isZero();
         pub const B = params.b;
