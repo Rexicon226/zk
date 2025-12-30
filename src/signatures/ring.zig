@@ -25,7 +25,7 @@ const Transcript = merlin.Transcript(enum {
 /// implemented for other sigma protocols).
 ///
 /// The signature structure:
-/// $$\sigma = (c_1, z_{x,1}, z_{r,1}, ..., z_{x,n}, z_{r_n})$$
+/// $$\sigma = (c_1, z_{x,1}, z_{r,1}, ..., c_n, z_{x,n}, z_{r,n})$$
 pub fn Signature(
     // The number of public keys in the signature ring.
     N: comptime_int,
@@ -36,6 +36,10 @@ pub fn Signature(
         z_r: [N]Scalar,
 
         const RingSignature = @This();
+
+        comptime {
+            std.debug.assert(N >= 2);
+        }
 
         const contract: Transcript.Contract = c: {
             const double: [2]Transcript.Input = .{
@@ -67,19 +71,24 @@ pub fn Signature(
             var z_r: [N]Scalar = undefined;
             var T: [N]Point = undefined;
 
+            // Real commitment for our index
+            var alpha_x: Scalar = .random();
+            var alpha_r: Scalar = .random();
+            // Make sure to clear the ephemeral secret nonces.
+            defer std.crypto.secureZero(u64, &alpha_x.limbs);
+            defer std.crypto.secureZero(u64, &alpha_r.limbs);
+
             // Simulate proofs
             for (0..N) |i| {
-                if (i == s) continue; // skip our entry
-                c[i] = .random();
-                z_x[i] = .random();
-                z_r[i] = .random();
-                T[i] = commitment(ring[i].p.point, z_x[i], z_r[i], c[i]);
+                if (i == s) {
+                    T[s] = pedersen.init(alpha_x, &.{ .mu = alpha_r }).point;
+                } else {
+                    c[i] = .random();
+                    z_x[i] = .random();
+                    z_r[i] = .random();
+                    T[i] = commitment(ring[i].p.point, z_x[i], z_r[i], c[i]);
+                }
             }
-
-            // Real commitment for our index
-            const alpha_x: Scalar = .random();
-            const alpha_r: Scalar = .random();
-            T[s] = pedersen.init(alpha_x, &.{ .mu = alpha_r }).point;
 
             // Fiat-shamir challenge
             comptime var session = Transcript.getSession(contract);
@@ -102,9 +111,9 @@ pub fn Signature(
                 if (i == s) continue;
                 sum_c = sum_c.add(c[i]);
             }
-            c[s] = .fromBytes(Edwards25519.scalar.sub(c_total.toBytes(), sum_c.toBytes()));
 
             // Real response
+            c[s] = .fromBytes(Edwards25519.scalar.sub(c_total.toBytes(), sum_c.toBytes()));
             z_x[s] = (alpha_x.add(c[s].mul(kp.sk.scalar)));
             z_r[s] = (alpha_r.add(c[s].mul(kp.opening.mu)));
 
@@ -139,16 +148,15 @@ pub fn Signature(
             );
 
             inline for (ring, &T) |r, t| {
+                @setEvalBranchQuota(N * 40);
                 transcript.append(&session, .point, "P", r.p.point);
                 transcript.append(&session, .point, "T", t);
             }
             const c_check = transcript.challengeScalar(&session, "challenge");
 
             // Check challenge sum
-            var sum_c: Scalar = .fromBytes(@splat(0));
-            for (0..N) |i| {
-                sum_c = (sum_c.add(c[i]));
-            }
+            var sum_c: Scalar = c[0];
+            for (1..N) |i| sum_c = (sum_c.add(c[i]));
 
             // Check that sum_c == c_check to verify the signature is correct.
             // TODO: is there a faster way to compare the scalars?
@@ -166,7 +174,7 @@ pub fn Signature(
     };
 }
 
-test "basic ring signature idea" {
+test "basic ring signature" {
     const N = 10;
     const s = 1;
 
@@ -187,4 +195,26 @@ test "basic ring signature idea" {
 
     const signature = Signature(N).init(&ring, s, &kp);
     try signature.verify(&ring);
+}
+
+test "verify ring doesn't contain signer's pubkey" {
+    const N = 10;
+    const s = 1;
+
+    const kp: KeyPair = .random();
+
+    var ring: [N]PublicKey = undefined;
+    for (0..N) |i| {
+        ring[i] = switch (i) {
+            s => kp.pk,
+            else => .{ .p = pedersen.initScalar(.random())[0] },
+        };
+    }
+
+    const signature = Signature(N).init(&ring, s, &kp);
+
+    // Incorrectly override the public key.
+    ring[s] = ring[0];
+
+    try std.testing.expectError(error.InvalidRingSignature, signature.verify(&ring));
 }
