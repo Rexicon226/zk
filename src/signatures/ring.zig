@@ -1,4 +1,33 @@
-//! "Ring" signatures.
+//! This file implements different forms of ring signatures.
+//!
+//! Ring signatures are a form of signature that proves a message was
+//! signed by someone in the set of public keys, but hides which particular
+//! public key was responsible.
+//!
+//! The default "ring signature" schemes people usually talk about do not
+//! have the ability to guarantee other useful properties, like uniqueness
+//! (same signer cannot sign twice) and accountability.
+//!
+//! The general way ring signatures are implemented is through $\sigma$-protocols
+//! (like Schnorr), OR-proofs, and Fiat-Shamir to remove the interaction.
+//!
+//! The signer:
+//! 1. Simulates proofs for keys they don't know.
+//! 2. Produces a real proof for the key they *do* know.
+//! 3. Combines them together with a order-consistent hash (transcript).
+//!
+//! To a verifier, all proofs look identical, making them information-theoretically
+//! secure. An attacker/malicious prover could spend an infinite amount of time
+//! and resources trying to decern which proof was the "real" one, and would be
+//! unable to.
+//!
+//! ## Extensions
+//!
+//! There are many extensions to ring signatures. Interesting ones include:
+//! - Linkable ring signatures, which allow you to tell if the same signer signed
+//! twice. This is often used to prevent double-spending, such as in Monero's RingCT construct.
+//! - Threshold ring signatures, where at least $k$ of $n$ must sign, but which $k$ in the
+//! ring of $n$ public keys still remains anonymous.
 
 const std = @import("std");
 const builtin = @import("builtin");
