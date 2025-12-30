@@ -360,7 +360,7 @@ pub fn Transcript(Domains: type) type {
         pub const Contract = []const Input;
 
         pub const Session = struct {
-            i: u8,
+            i: u16,
             contract: Contract,
             err: bool, // if validate_point errors, we skip the finish() check
 

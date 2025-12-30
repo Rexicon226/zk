@@ -124,3 +124,20 @@ pub const SecretKey = struct {
         return .{ .scalar = .random() };
     }
 };
+
+pub const KeyPair = struct {
+    sk: SecretKey,
+    opening: Opening,
+    pk: PublicKey,
+
+    pub fn random() KeyPair {
+        const opening = Opening.random();
+        const secret = SecretKey.random();
+        const pubkey = PublicKey.fromSecretKey(&secret, &opening);
+        return .{
+            .opening = opening,
+            .sk = secret,
+            .pk = pubkey,
+        };
+    }
+};
