@@ -99,3 +99,28 @@ pub fn scalarFromInt(comptime T: type, value: T) Scalar {
     std.mem.writeInt(T, buffer[0..@sizeOf(T)], value, .little);
     return Scalar.fromBytes(buffer);
 }
+
+/// A Pedersen-commited public key.
+///
+/// The user has:
+/// - Secret key: $x \in \mathbb{Z}_q$
+/// - Blinding: $r \in \mathbb{Z}_q$
+///
+/// The public key is a pedersen commitment to the secret:
+///
+/// $P = {G^x}{H^x}$
+pub const PublicKey = struct {
+    p: Commitment,
+
+    pub fn fromSecretKey(sk: *const SecretKey, o: *const Opening) PublicKey {
+        return .{ .p = init(sk.scalar, o) };
+    }
+};
+
+pub const SecretKey = struct {
+    scalar: Scalar,
+
+    pub fn random() SecretKey {
+        return .{ .scalar = .random() };
+    }
+};
