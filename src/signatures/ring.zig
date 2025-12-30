@@ -163,7 +163,7 @@ pub fn Signature(
             if (!std.mem.eql(u8, &c_check.toBytes(), &sum_c.toBytes())) return error.InvalidRingSignature;
         }
 
-        // $$T_i = G^{z_x[i]} * H^{z_r[i]} * P_i^{-c[i]}$$
+        /// $$T_i = G^{z_x[i]} * H^{z_r[i]} * P_i^{-c[i]}$$
         fn commitment(P_i: Point, z_x: Scalar, z_r: Scalar, c_i: Scalar) Point {
             return ed25519.mulMulti(
                 3,
