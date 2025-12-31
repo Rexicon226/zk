@@ -25,7 +25,8 @@
 //!
 //! There are many extensions to ring signatures. Interesting ones include:
 //! - Linkable ring signatures, which allow you to tell if the same signer signed
-//! twice. This is often used to prevent double-spending, such as in Monero's RingCT construct.
+//! twice. This is often used to prevent double-spending, such as in Monero's
+//! [RingCT](https://eprint.iacr.org/2015/1098.pdf) construct.
 //! - Threshold ring signatures, where at least $k$ of $n$ must sign, but which $k$ in the
 //! ring of $n$ public keys still remains anonymous.
 
