@@ -1,11 +1,16 @@
 /// Implements DekartProof as described in https://eprint.iacr.org/2025/1159.
-fn Proof(comptime E: type, ell: comptime_int) type {
-    const G1 = E.G1;
-    const G2 = E.G2;
+fn Proof(comptime C: type, n: comptime_int, ell: comptime_int) type {
+    const G1 = C.G1;
+    const G2 = C.G2;
     _ = ell;
+    _ = n;
 
     return struct {
         hatC: G1,
+
+        pub fn setup() struct { ProverKey, VerificationKey } {
+            return undefined;
+        }
 
         /// TODO: document the fake pedersen commitment
         const Homomorphism = struct {
@@ -53,4 +58,8 @@ fn Proof(comptime E: type, ell: comptime_int) type {
     };
 }
 
-test "dekart" {}
+const bls = @import("../curves/bls.zig").BLS12_381;
+test "dekart" {
+    const P = Proof(bls, 31, 16);
+    _ = P.setup();
+}

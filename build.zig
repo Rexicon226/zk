@@ -18,7 +18,7 @@ pub fn build(b: *std.Build) !void {
             .target = b.graph.host,
             // Overall it takes less time to compile in debug mode than the perf gain from a release mode at runtime
             .optimize = .Debug,
-            .root_source_file = b.path("scripts/generator_chain.zig"),
+            .root_source_file = b.path("src/range_proofs/bulletproofs/generator_chain.zig"),
         }),
     });
     const run_generator_chain = b.addRunArtifact(generator_chain);

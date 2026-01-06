@@ -1,7 +1,7 @@
 const std = @import("std");
 const sw = @import("sw.zig");
 const ff = @import("../ff.zig");
-const extensions = @import("../extensions.zig");
+const extensions = @import("extensions.zig");
 
 const ShortWeierstrass = sw.ShortWeierstrass;
 const Field = ff.Fp;
@@ -22,6 +22,12 @@ pub const BLS12_381 = struct {
         .flags = .sw,
     });
 
+    pub const Fp2 = extensions.Quadratic(
+        Fp,
+        .{ .non_residue = .negative_one },
+        struct {},
+    );
+
     pub const G1 = ShortWeierstrass(Fp, .{
         .a = .zero,
         .b = .int(4),
@@ -39,7 +45,7 @@ pub const BLS12_381 = struct {
             // Algorithm from Section 6 of https://eprint.iacr.org/2021/1130.
             // Check that ψ(P) == -[x^2]P
 
-            const xp = point.toProjective().mulScalar(u64, x);
+            const xp = point.mulScalar(u64, x);
             if (xp.eql(point.toProjective()) and !point.infinity) return error.WrongSubgroup;
 
             const rhs = xp.mulScalar(u64, x).negate();
@@ -49,7 +55,24 @@ pub const BLS12_381 = struct {
         }
     });
 
-    /// Utilities for decoding from the Etheruem Bls12 ABI described here:
+    pub const G2 = ShortWeierstrass(Fp2, .{
+        // [0, 0]
+        .a = .{ .c0 = G1.A, .c1 = G1.A },
+        // [4, 4]
+        .b = .{ .c0 = G1.B, .c1 = G1.B },
+    }, struct {
+        pub fn checkSubgroup(point: G2.Affine) !void {
+            // Algorithm from Section 4 of https://eprint.iacr.org/2021/1130.
+            // Check that p[X] = [X]P
+
+            const xp = point.mulScalar(u64, x).negate();
+            _ = xp;
+
+            if (true) @panic("TODO");
+        }
+    });
+
+    /// Utilities for decoding from the Ethereum Bls12 ABI described here:
     /// https://eips.ethereum.org/EIPS/eip-2537#fine-points-and-encoding-of-base-elements
     pub const eth = struct {
         pub fn fromBytesG1(input: *const [128]u8, check_subgroup: bool) !G1.Affine {

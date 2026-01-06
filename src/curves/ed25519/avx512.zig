@@ -589,8 +589,8 @@ inline fn shuffleLanes(comptime control: Shuffle, x: u64x4) u64x4 {
     );
 }
 
-fn blendLanes(comptime control: Lanes, x: u64x4, y: u64x4) u64x4 {
-    const c: u32 = switch (control) {
+fn blendLanes(comptime lanes: Lanes, x: u64x4, y: u64x4) u64x4 {
+    const c: u32 = switch (lanes) {
         .D => 0b11_00_00_00,
         .C => 0b00_11_00_00,
         .AB => 0b00_00_11_11,
