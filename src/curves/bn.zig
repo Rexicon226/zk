@@ -2,7 +2,7 @@ const std = @import("std");
 const stdx = @import("stdx");
 const sw = @import("sw.zig");
 const ff = @import("../ff.zig");
-const extensions = @import("../extensions.zig");
+const extensions = @import("extensions.zig");
 
 const Quadratic = extensions.Quadratic;
 const Cubic = extensions.Cubic;
@@ -268,7 +268,7 @@ pub const Bn254 = struct {
                 const psi = xp.frob();
                 const psi2 = xp.frob2();
                 const psi3 = psi2.frob();
-                const rhs = p.addProjective(xp).add(psi).add(psi2);
+                const rhs = xp.addAffine(p).add(psi).add(psi2);
                 const lhs = psi3.dbl();
 
                 if (!lhs.eql(rhs)) return error.WrongSubgroup;

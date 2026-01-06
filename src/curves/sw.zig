@@ -207,59 +207,9 @@ pub fn ShortWeierstrass(
                 var iterator = stdx.BitIterator(T, .big, true).init(v);
                 while (iterator.next()) |set| {
                     r = r.dbl();
-                    if (set) r = base.addProjective(r);
+                    if (set) r = r.addAffine(base);
                 }
                 return r;
-            }
-
-            /// https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd-2007-bl
-            ///
-            /// NOTE: the argument are "reversed", `(X1, Y1, Z1)` is `b` and `(X2, Y2, Z2)` is `a`.
-            pub fn addProjective(a: Affine, b: Self) Self {
-                // b==0, return a
-                if (b.isZero()) return a.toProjective();
-                // a==0, return b
-                if (a.isZero()) return b;
-
-                // Z1Z1 = Z1^2
-                const z1z1 = b.z.sq();
-                // U2 = X2*Z1Z1
-                const @"u2" = a.x.mul(z1z1);
-                // S2 = Y2*Z1*Z1Z1
-                const s2 = a.y.mul(b.z).mul(z1z1);
-
-                // if (a==b): return b * 2
-                if (@"u2".eql(b.x)) {
-                    // points are equal, double it
-                    if (s2.eql(b.y)) return b.dbl();
-                    // a + (-a) = 0
-                    return .zero;
-                }
-
-                // H = U2-X1
-                const h = @"u2".sub(b.x);
-                // HH = H^2
-                const hh = h.sq();
-                // I = 4*HH
-                const i = hh.dbl().dbl();
-                // J = H*I
-                const j = h.mul(i);
-                // r = 2*(S2-Y1)
-                const r = s2.sub(b.y).dbl();
-                // V = X1*I
-                const v = b.x.mul(i);
-                // X3 = r^2 - J - 2*V
-                const x3 = r.sq().sub(j).sub(v).sub(v);
-                // Y3 = r*(V - V3) - 2*Y1*J
-                const y3 = v.sub(x3).mul(r).sub(b.y.mul(j).dbl());
-                // Z3 = (Z1 + H)^2 - Z1Z1 - HH
-                const z3 = b.z.add(h).sq().sub(z1z1).sub(hh);
-
-                return .{
-                    .x = x3,
-                    .y = y3,
-                    .z = z3,
-                };
             }
         };
 
@@ -329,6 +279,56 @@ pub fn ShortWeierstrass(
             const y3 = v.sub(x3).mul(r).sub(s1.mul(j).dbl());
             // Z3 = ((Z1+Z2)^2-Z1Z1-Z2Z2)*H
             const z3 = a.z.add(b.z).sq().sub(z1z1).sub(z2z2).mul(h);
+
+            return .{
+                .x = x3,
+                .y = y3,
+                .z = z3,
+            };
+        }
+
+        /// https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd-2007-bl
+        ///
+        /// NOTE: the argument are "reversed", `(X1, Y1, Z1)` is `a` and `(X2, Y2, Z2)` is `b`.
+        pub fn addAffine(a: Self, b: Affine) Self {
+            // b==0, return a
+            if (a.isZero()) return b.toProjective();
+            // a==0, return b
+            if (b.isZero()) return a;
+
+            // Z1Z1 = Z1^2
+            const z1z1 = a.z.sq();
+            // U2 = X2*Z1Z1
+            const @"u2" = b.x.mul(z1z1);
+            // S2 = Y2*Z1*Z1Z1
+            const s2 = b.y.mul(a.z).mul(z1z1);
+
+            // if (a==b): return b * 2
+            if (@"u2".eql(a.x)) {
+                // points are equal, double it
+                if (s2.eql(a.y)) return a.dbl();
+                // a + (-a) = 0
+                return .zero;
+            }
+
+            // H = U2-X1
+            const h = @"u2".sub(a.x);
+            // HH = H^2
+            const hh = h.sq();
+            // I = 4*HH
+            const i = hh.dbl().dbl();
+            // J = H*I
+            const j = h.mul(i);
+            // r = 2*(S2-Y1)
+            const r = s2.sub(a.y).dbl();
+            // V = X1*I
+            const v = a.x.mul(i);
+            // X3 = r^2 - J - 2*V
+            const x3 = r.sq().sub(j).sub(v).sub(v);
+            // Y3 = r*(V - V3) - 2*Y1*J
+            const y3 = v.sub(x3).mul(r).sub(a.y.mul(j).dbl());
+            // Z3 = (Z1 + H)^2 - Z1Z1 - HH
+            const z3 = a.z.add(h).sq().sub(z1z1).sub(hh);
 
             return .{
                 .x = x3,
