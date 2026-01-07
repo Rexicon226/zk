@@ -12,7 +12,7 @@ const CompressedScalar = [32]u8;
 // TODO: verify batch of messages, generic
 
 /// Verifies multiple signatures over the same message. The behaviour of this function
-/// matches calling ed25519-dalek's `verify` (*not* `verify_strict`) in a loop over the messages.
+/// matches calling ed25519-dalek's `verify_strict` in a loop over the messages.
 pub fn verifyBatchOverSingleMessage(
     max: comptime_int,
     signatures: []const Signature,
