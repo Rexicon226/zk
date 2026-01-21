@@ -7,5 +7,5 @@ pub const Falcon512 = falcon.Falcon512;
 test {
     _ = eddsa;
     _ = ring;
-    _ = falcon;
+    _ = @import("signatures/falcon/test.zig");
 }
