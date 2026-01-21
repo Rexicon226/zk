@@ -42,18 +42,18 @@ pub fn main() !void {
         false => "generic (avx2/neon)",
     }});
 
-    // if (filter.run(.bulletproofs)) {
-    //     try bulletproofs.run();
-    // }
-    // if (filter.run(.ed25519)) {
-    //     try ed25519.run();
-    // }
-    // if (filter.run(.bn254)) {
-    //     try bn254.run();
-    // }
-    // if (filter.run(.chacha)) {
-    //     try chacha.run();
-    // }
+    if (filter.run(.bulletproofs)) {
+        try bulletproofs.run();
+    }
+    if (filter.run(.ed25519)) {
+        try ed25519.run();
+    }
+    if (filter.run(.bn254)) {
+        try bn254.run();
+    }
+    if (filter.run(.chacha)) {
+        try chacha.run();
+    }
     if (filter.run(.falcon)) {
         try falcon.run();
     }
@@ -248,8 +248,8 @@ const chacha = struct {
 const falcon = struct {
     const Falcon512 = zk.signatures.Falcon512;
 
-    const iterations = 10000;
-    const warmup = 10000;
+    const iterations = 100_000;
+    const warmup = 1_000;
 
     fn run() !void {
         const data: []const u8 = &.{ 100, 97, 116, 97, 49 };
@@ -259,15 +259,18 @@ const falcon = struct {
         const signature: Falcon512.Signature = try .fromBytes(signature_bytes);
         const pubkey: Falcon512.PublicKey = try .fromBytes(pubkey_bytes);
 
-        var total: u64 = 0;
-        for (0..iterations + warmup) |i| {
+        for (0..warmup) |i| {
             std.mem.doNotOptimizeAway(i);
-
-            const start = now();
             std.mem.doNotOptimizeAway(Falcon512.verify(data, signature, pubkey));
-            if (i > warmup) total += now() - start;
         }
-        log.info("Falcon512: verify {D}", .{total / iterations});
+
+        const start = now();
+        for (0..iterations) |i| {
+            std.mem.doNotOptimizeAway(i);
+            std.mem.doNotOptimizeAway(Falcon512.verify(data, signature, pubkey));
+        }
+        const elapsed = now() - start;
+        log.info("Falcon512: verify {D}", .{elapsed / iterations});
     }
 };
 

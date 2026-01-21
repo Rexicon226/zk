@@ -108,10 +108,9 @@ fn Falcon(N: usize) type {
             data: u32,
 
             pub fn init(value: i16) Felt {
-                const sign: i16 = if (value < 0) -1 else 0;
+                const sign: i16 = if (value < 0) -1 else 1;
                 const reduced = sign * @mod(sign * value, Q);
-                const canon: u32 = @intCast(reduced + Q * @as(i16, @intFromBool(value < 0)));
-                return .{ .data = canon };
+                return .{ .data = @intCast(reduced + Q * @as(i16, @intFromBool(value < 0))) };
             }
 
             fn add(a: Felt, b: Felt) Felt {
@@ -283,8 +282,8 @@ fn Falcon(N: usize) type {
                 length_squared += @as(i64, j) * j;
             }
             const bound = switch (bits) {
-                .nine => 34034726,
-                .ten => 70265242,
+                .nine => 34_034_726,
+                .ten => 70_265_242,
             };
             if (length_squared >= bound) return error.InvalidBound;
         }
