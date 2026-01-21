@@ -31,8 +31,9 @@ fn Falcon(N: usize) type {
             h: Polynomial(N, Felt),
 
             const BITS_PER_VALUE = 14;
+            const SIZE = 1 + (14 * N / 8);
 
-            pub fn fromBytes(bytes: *const [1 + (14 * N / 8)]u8) !PublicKey {
+            pub fn fromBytes(bytes: *const [SIZE]u8) !PublicKey {
                 // first byte is the header, encoded as
                 // 0 0 0 0 n n n n
                 // where the leftmost 4 bits are 0
@@ -107,18 +108,16 @@ fn Falcon(N: usize) type {
             data: u32,
 
             pub fn init(value: i16) Felt {
-                const gtz_bool = value >= 0;
-                const gtz_int: i16 = @intFromBool(gtz_bool);
-                const gtz_sign = gtz_int - @intFromBool(!gtz_bool);
-                const reduced = gtz_sign * @mod(gtz_sign * value, Q);
-                const canon: u32 = @intCast(reduced + Q * (1 - gtz_int));
+                const sign: i16 = if (value < 0) -1 else 0;
+                const reduced = sign * @mod(sign * value, Q);
+                const canon: u32 = @intCast(reduced + Q * @as(i16, @intFromBool(value < 0)));
                 return .{ .data = canon };
             }
 
             fn add(a: Felt, b: Felt) Felt {
                 const s = a.data +% b.data;
-                const d, const n = @subWithOverflow(s, Q);
-                const r = d +% (Q * @as(u32, n));
+                const d, const n: u32 = @subWithOverflow(s, Q);
+                const r = d +% (Q * n);
                 return .{ .data = r };
             }
             fn sub(a: Felt, b: Felt) Felt {
@@ -149,15 +148,14 @@ fn Falcon(N: usize) type {
                 }
 
                 /// Generate a polynomial of degree at most (n - 1), with coefficients
-                /// following a discrete Gaussian distribution D_{Z, 0, sigma} with
+                /// following a discrete Gaussian distribution $D_{Z, 0, sigma}$ with
                 /// sigma = 1.17 * sqrt(q / (2 * n)).
                 pub fn generate() Self {
                     comptime std.debug.assert(T == i16);
 
                     const rng = std.crypto.random;
                     const mu = 0.0;
-                    // 1.17 * sqrt(12289 / 8192)
-                    const sigma_star = 1.43300980528773;
+                    const sigma_star = 1.17 * @sqrt(12289.0 / 8192.0);
                     var f0: [4096]i16 = undefined;
                     for (&f0) |*o| o.* = sampler.samplerz(
                         mu,
@@ -203,11 +201,12 @@ fn Falcon(N: usize) type {
                     return .{ .coeff = out };
                 }
 
+                /// Compute the evaluations of the polynomial on the roots of the
+                /// polynomial X^n + 1 using a fast Fourier transform.
+                ///
+                /// Algorithm 1 from https://eprint.iacr.org/2016/504.pdf.
                 fn fft(p: Self) Self {
-                    const psir = switch (T) {
-                        Felt => data.BITREVERSED_POWERS,
-                        else => @compileError("TODO"),
-                    };
+                    const psi_rev = data.BITREVERSED_POWERS;
                     var coeff = p.coeff; // copy, since we'll be modifying
                     var t: usize = length;
                     var m: usize = 1;
@@ -216,7 +215,7 @@ fn Falcon(N: usize) type {
                         for (0..m) |i| {
                             const j1 = 2 * i * t;
                             const j2 = j1 + t - 1;
-                            const s = psir[m + i];
+                            const s = psi_rev[m + i];
                             for (j1..j2 + 1) |j| {
                                 const u = coeff[j];
                                 const v = coeff[j + t].mul(s);
@@ -228,15 +227,17 @@ fn Falcon(N: usize) type {
                     }
                     return .{ .coeff = coeff };
                 }
+
+                /// Compute the coefficients of the polynomial with the given evaluations
+                /// on the roots of X^n + 1 using an inverse fast Fourier transform.
+                ///
+                /// Algorithm 2 from https://eprint.iacr.org/2016/504.pdf.
                 fn ifft(p: Self) Self {
                     const ninv: Felt = .init(switch (bits) {
                         .nine => 12265,
                         .ten => 12277,
                     });
-                    const psiir = switch (T) {
-                        Felt => data.BITREVSERED_POWERS_INVERSE,
-                        else => @compileError("TODO"),
-                    };
+                    const psi_rev_inv = data.BITREVSERED_POWERS_INVERSE;
                     var coeff = p.coeff;
                     var t: usize = 1;
                     var m: usize = length;
@@ -245,7 +246,7 @@ fn Falcon(N: usize) type {
                         var j1: usize = 0;
                         for (0..h) |i| {
                             const j2 = j1 + t - 1;
-                            const s = psiir[h + i];
+                            const s = psi_rev_inv[h + i];
                             for (j1..j2 + 1) |j| {
                                 const u = coeff[j];
                                 const v = coeff[j + t];
@@ -257,9 +258,7 @@ fn Falcon(N: usize) type {
                         t <<= 1;
                         m >>= 1;
                     }
-                    for (&coeff) |*a| {
-                        a.* = a.mul(ninv);
-                    }
+                    for (&coeff) |*a| a.* = a.mul(ninv);
                     return .{ .coeff = coeff };
                 }
             };
@@ -323,7 +322,6 @@ fn Falcon(N: usize) type {
 
         fn hashToPoint(msg: []const u8, r: *const [40]u8) Polynomial(N, Felt) {
             const K = (1 << 16) / Q;
-
             var state: Shake256 = .init(.{});
             state.update(r);
             state.update(msg);
@@ -339,7 +337,6 @@ fn Falcon(N: usize) type {
                     i += 1;
                 }
             }
-
             return .{ .coeff = coeffs };
         }
     };
