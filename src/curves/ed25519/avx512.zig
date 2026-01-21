@@ -43,7 +43,7 @@ inline fn madd52hi(x: u64x4, y: u64x4, z: u64x4) u64x4 {
 pub const ExtendedPoint = struct {
     limbs: [5]u64x4,
 
-    const zero: ExtendedPoint = .{ .limbs = @splat(@splat(0)) };
+    pub const zero: ExtendedPoint = .{ .limbs = @splat(@splat(0)) };
     pub const identityElement: ExtendedPoint = .{ .limbs = .{
         .{ 0, 1, 1, 0 },
         .{ 0, 0, 0, 0 },
@@ -66,7 +66,7 @@ pub const ExtendedPoint = struct {
         return init(x, x, x, x);
     }
 
-    fn fromCached(cp: CachedPoint) ExtendedPoint {
+    pub fn fromCached(cp: CachedPoint) ExtendedPoint {
         return .{ .limbs = cp.limbs };
     }
 
@@ -85,7 +85,7 @@ pub const ExtendedPoint = struct {
         };
     }
 
-    fn split(self: ExtendedPoint) [4]Fe {
+    pub fn split(self: ExtendedPoint) [4]Fe {
         const limbs = self.limbs;
         return .{
             .{ .limbs = .{ limbs[0][0], limbs[1][0], limbs[2][0], limbs[3][0], limbs[4][0] } },
@@ -95,7 +95,7 @@ pub const ExtendedPoint = struct {
         };
     }
 
-    fn reduce(self: ExtendedPoint) CachedPoint {
+    pub fn reduce(self: ExtendedPoint) CachedPoint {
         const mask: u64x4 = @splat((1 << 51) - 1);
         const r19: u64x4 = @splat(19);
 
@@ -118,7 +118,7 @@ pub const ExtendedPoint = struct {
         return self.addCached(.fromExtended(other));
     }
 
-    fn addLimbs(self: ExtendedPoint, other: ExtendedPoint) ExtendedPoint {
+    pub fn addLimbs(self: ExtendedPoint, other: ExtendedPoint) ExtendedPoint {
         return .{ .limbs = .{
             self.limbs[0] + other.limbs[0],
             self.limbs[1] + other.limbs[1],
@@ -145,7 +145,7 @@ pub const ExtendedPoint = struct {
         return self.addCached(cp.neg());
     }
 
-    fn shuffle(self: ExtendedPoint, comptime control: Shuffle) ExtendedPoint {
+    pub fn shuffle(self: ExtendedPoint, comptime control: Shuffle) ExtendedPoint {
         return .{ .limbs = .{
             shuffleLanes(control, self.limbs[0]),
             shuffleLanes(control, self.limbs[1]),
@@ -155,7 +155,7 @@ pub const ExtendedPoint = struct {
         } };
     }
 
-    fn blend(self: ExtendedPoint, other: ExtendedPoint, comptime control: Lanes) ExtendedPoint {
+    pub fn blend(self: ExtendedPoint, other: ExtendedPoint, comptime control: Lanes) ExtendedPoint {
         return .{ .limbs = .{
             blendLanes(control, self.limbs[0], other.limbs[0]),
             blendLanes(control, self.limbs[1], other.limbs[1]),
@@ -165,13 +165,13 @@ pub const ExtendedPoint = struct {
         } };
     }
 
-    fn diffSum(self: ExtendedPoint) ExtendedPoint {
+    pub fn diffSum(self: ExtendedPoint) ExtendedPoint {
         const tmp1 = self.shuffle(.BADC);
         const tmp2 = self.blend(self.negateLazy(), .AC);
         return tmp1.addLimbs(tmp2);
     }
 
-    fn negateLazy(self: ExtendedPoint) ExtendedPoint {
+    pub fn negateLazy(self: ExtendedPoint) ExtendedPoint {
         const lo: u64x4 = @splat(0x7FFFFFFFFFFED0);
         const hi: u64x4 = @splat(0x7FFFFFFFFFFFF0);
         return .{ .limbs = .{
@@ -223,7 +223,7 @@ pub const CachedPoint = struct {
     } };
     // zig fmt: on
 
-    fn mul(self: CachedPoint, b: CachedPoint) ExtendedPoint {
+    pub noinline fn mul(self: CachedPoint, b: CachedPoint) ExtendedPoint {
         const x = self.limbs;
         const y = b.limbs;
 

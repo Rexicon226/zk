@@ -100,6 +100,7 @@ pub fn build(b: *std.Build) !void {
                 .{ .name = "stdx", .module = stdx },
             },
         }),
+        .use_llvm = use_llvm,
     });
     b.installArtifact(benchmark_exe);
     const benchmark_step = b.step("benchmark", "Runs the benchmarks");

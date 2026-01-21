@@ -62,7 +62,7 @@ const LOW_26_BITS: u64x4 = @splat((@as(u64, 1) << 26) - 1);
 pub const ExtendedPoint = struct {
     limbs: [5]u32x8,
 
-    const zero: ExtendedPoint = .{ .limbs = @splat(@splat(0)) };
+    pub const zero: ExtendedPoint = .{ .limbs = @splat(@splat(0)) };
     pub const identityElement: ExtendedPoint = .{ .limbs = .{
         .{ 0, 1, 0, 0, 1, 0, 0, 0 },
         @splat(0),
