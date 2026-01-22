@@ -17,15 +17,8 @@ fn Falcon(N: usize) type {
 
         /// The integer modulus used in Falcon.
         const Q = 12 * 1024 + 1;
-
-        const sigma = switch (bits) {
-            .nine => 165.7366171829776,
-            .ten => 168.38857144654395,
-        };
-        const sigma_min = switch (bits) {
-            .nine => 1.2778336969128337,
-            .ten => 1.298280334344292,
-        };
+        const V = @Vector(4, i16);
+        const QV: V = @splat(Q);
 
         pub const PublicKey = struct {
             h: Polynomial(N, Felt),
@@ -38,34 +31,38 @@ fn Falcon(N: usize) type {
                 // 0 0 0 0 n n n n
                 // where the leftmost 4 bits are 0
                 // and nnnn encodes logn
-                const header = bytes[0];
-                if (header != logn) return error.InvalidHeader;
+                if (bytes[0] != logn) return error.InvalidHeader;
 
-                // the rest of the bytes are the public key polynomial
+                // The rest of the bytes are the public key polynomial
                 // each value (in the 0 to Q - 1 range) is encoded as a 14-bit sequence
                 // (since Q = 12289, 14 bits per value is used). The encoded value are
                 // concatted into a bit sequence of 14N bits, which are represented as 14N / 8 bytes.
                 const h = bytes[1..];
-                var position: usize = 0;
                 var coeff: [N]Felt = undefined;
-                for (0..N) |i| {
-                    var val: i16 = 0;
-                    for (0..BITS_PER_VALUE) |_| {
-                        val = (val << 1) | bit(h, position);
-                        position += 1;
-                    }
-                    if (val > Q - 1) return error.InvalidCoeff;
-                    coeff[i] = .init(val);
+                inline for (0..512 / 4) |i| {
+                    const in = h[i * 7 ..][0..7];
+                    const out: *[4]u32 = @ptrCast(coeff[i * 4 ..][0..4]);
+
+                    const vec: @Vector(4, u32) = .{
+                        @bitCast(in[0..4].*),
+                        @bitCast(in[0..4].*),
+                        @bitCast(in[3..7].*),
+                        @bitCast(in[3..7].*),
+                    };
+                    const shifted = @byteSwap(vec) >> .{ 18, 4, 14, 0 };
+                    const masked = shifted & @as(@Vector(4, u32), @splat((1 << 14) - 1));
+                    const elem: @Vector(4, i16) = @bitCast(@as(@Vector(4, u16), @intCast(masked)));
+                    if (@reduce(.Or, elem > @as(@Vector(4, i16), @splat(Q - 1)))) return error.InvalidCoeff;
+                    out.* = Felt.initVector(elem);
                 }
+
                 return .{ .h = .{ .coeff = coeff } };
             }
         };
 
         pub const Signature = struct {
-            /// random salt
             nonce: [40]u8,
-            /// compressed s2 polynomial
-            s2: []const u8,
+            s2: Polynomial(N, i16),
 
             const Header = packed struct(u8) {
                 logn: u4,
@@ -79,8 +76,6 @@ fn Falcon(N: usize) type {
             };
 
             /// NOTE: As signatures use compress/decompress, their length is variable.
-            /// NOTE: This function *retains* a reference to `bytes`, since we perform
-            /// the decompression while verifying, not here.
             pub fn fromBytes(bytes: []const u8) !Signature {
                 if (bytes.len > 666) return error.TooManyBytes;
                 // We need at least 41 bytes to read the header/salt.
@@ -99,7 +94,7 @@ fn Falcon(N: usize) type {
 
                 return .{
                     .nonce = bytes[1..][0..40].*,
-                    .s2 = bytes[41..],
+                    .s2 = try decompress(bytes[41..]),
                 };
             }
         };
@@ -111,6 +106,14 @@ fn Falcon(N: usize) type {
                 const sign: i16 = if (value < 0) -1 else 1;
                 const reduced = sign * @mod(sign * value, Q);
                 return .{ .data = @intCast(reduced + Q * @as(i16, @intFromBool(value < 0))) };
+            }
+
+            fn initVector(value: V) @Vector(4, u32) {
+                const one: V = @splat(1);
+                const predicate = value < (one - one);
+                const sign = @select(i16, predicate, -one, one);
+                const reduced = sign * @mod(sign * value, QV);
+                return @intCast(reduced + QV * @intFromBool(predicate));
             }
 
             fn add(a: Felt, b: Felt) Felt {
@@ -149,28 +152,28 @@ fn Falcon(N: usize) type {
                 /// Generate a polynomial of degree at most (n - 1), with coefficients
                 /// following a discrete Gaussian distribution $D_{Z, 0, sigma}$ with
                 /// sigma = 1.17 * sqrt(q / (2 * n)).
-                pub fn generate() Self {
-                    comptime std.debug.assert(T == i16);
+                // pub fn generate() Self {
+                //     comptime std.debug.assert(T == i16);
 
-                    const rng = std.crypto.random;
-                    const mu = 0.0;
-                    const sigma_star = 1.17 * @sqrt(12289.0 / 8192.0);
-                    var f0: [4096]i16 = undefined;
-                    for (&f0) |*o| o.* = sampler.samplerz(
-                        mu,
-                        sigma_star,
-                        sigma_star - 0.001,
-                        rng,
-                    );
-                    var f: [length]i16 = @splat(0);
-                    const k = 4096 / length;
-                    for (0..length) |i| {
-                        var sum: i16 = 0;
-                        for (0..k) |j| sum += f0[i * k + j];
-                        f[i] = sum;
-                    }
-                    return .{ .coeff = f };
-                }
+                //     const rng = std.crypto.random;
+                //     const mu = 0.0;
+                //     const sigma_star = 1.17 * @sqrt(12289.0 / 8192.0);
+                //     var f0: [4096]i16 = undefined;
+                //     for (&f0) |*o| o.* = sampler.samplerz(
+                //         mu,
+                //         sigma_star,
+                //         sigma_star - 0.001,
+                //         rng,
+                //     );
+                //     var f: [length]i16 = @splat(0);
+                //     const k = 4096 / length;
+                //     for (0..length) |i| {
+                //         var sum: i16 = 0;
+                //         for (0..k) |j| sum += f0[i * k + j];
+                //         f[i] = sum;
+                //     }
+                //     return .{ .coeff = f };
+                // }
 
                 fn toField(a: Self) Polynomial(length, Felt) {
                     comptime std.debug.assert(T == i16);
@@ -192,7 +195,7 @@ fn Falcon(N: usize) type {
                     for (&out) |*o| o.* = o.neg();
                     return .{ .coeff = out };
                 }
-                fn hadamardMul(a: Self, b: Self) Self {
+                fn mul(a: Self, b: Self) Self {
                     var out: [length]T = undefined;
                     for (&out, a.coeff, b.coeff) |*o, x, y| {
                         o.* = x.mul(y);
@@ -265,18 +268,17 @@ fn Falcon(N: usize) type {
 
         pub fn verify(msg: []const u8, sig: Signature, pk: PublicKey) !void {
             const c = hashToPoint(msg, &sig.nonce);
-            const s2 = try decompress(sig.s2);
 
-            const s2_ntt = s2.toField().fft();
+            const s2_ntt = sig.s2.toField().fft();
             const h_ntt = pk.h.fft();
             const c_ntt = c.fft();
 
             // s1 = c - s2 * pk.h;
-            const s1_ntt = c_ntt.sub(s2_ntt.hadamardMul(h_ntt));
+            const s1_ntt = c_ntt.sub(s2_ntt.mul(h_ntt));
             const s1 = s1_ntt.ifft();
 
             var length_squared: i64 = 0;
-            for (s1.coeff, s2.coeff) |i, j| {
+            for (s1.coeff, sig.s2.coeff) |i, j| {
                 const value: i64 = i.balanced();
                 length_squared += (value * value);
                 length_squared += @as(i64, j) * j;
@@ -294,7 +296,7 @@ fn Falcon(N: usize) type {
             return @intCast((bytes[byte] >> @intCast(idx)) & 1);
         }
 
-        fn decompress(s2: []const u8) !Polynomial(N, i16) {
+        pub fn decompress(s2: []const u8) !Polynomial(N, i16) {
             var out: [N]i16 = undefined;
             const length = s2.len * 8;
             var index: usize = 0;
@@ -314,7 +316,9 @@ fn Falcon(N: usize) type {
                 }
                 if (index >= length) return error.NotTerminator;
                 index += 1;
-                out[i] = sign * ((high_bits << 7) | low_bits);
+                const result = @as(i32, sign) * ((high_bits << 7) | low_bits);
+                if (result > Q - 1) return error.InvalidCoeff;
+                out[i] = @intCast(result);
             }
             return .{ .coeff = out };
         }
