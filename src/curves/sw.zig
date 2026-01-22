@@ -10,7 +10,7 @@ pub const Flags = packed struct(u8) {
     pub const mask: u8 = 0b11000000;
 };
 
-/// Here we work with elliptic curves given by the short Weierstrass equation:
+/// Here we work with elliptic curves given by the Short Weierstrass equation:
 /// $$E : y^2 = x^3 + a x + b$$
 ///
 /// over a field $\mathbb{F}$. \
