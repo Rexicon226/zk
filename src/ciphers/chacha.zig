@@ -95,12 +95,14 @@ pub fn ChaCha(comptime rounds: enum { eight, twenty }) type {
         fn refill(self: *Self) void {
             @branchHint(.cold);
 
+            // zig fmt: off
             const base: [4]V = .{
-                @bitCast([_][16]u8{"expand 32-byte k".*} ** 4),
-                @bitCast([_][16]u8{self.key[0..16].*} ** 4),
-                @bitCast([_][16]u8{self.key[16..32].*} ** 4),
-                @bitCast([_]u128{self.counter} ** 4),
+                @bitCast(@as([4][16]u8, @splat("expand 32-byte k".*))),
+                @bitCast(@as([4][16]u8, @splat(self.key[0..16].*))),
+                @bitCast(@as([4][16]u8, @splat(self.key[16..32].*))),
+                @bitCast(@as([4]u128,   @splat(self.counter))),
             };
+            // zig fmt: on
 
             // Prepare lanes of 4x chacha state:
             // - each lane is 4 chacha instances

@@ -60,7 +60,7 @@ pub fn Strobe(params: struct {
 
         pub fn init(label: []const u8) Self {
             const initial_state = state: {
-                var state: [200]u8 = .{0} ** 200;
+                var state: [200]u8 = @splat(0);
                 state[0..6].* = .{ 1, R + 2, 1, 0, 1, 96 };
                 state[6..18].* = "STROBEv1.0.2".*;
 
@@ -388,13 +388,13 @@ pub fn Transcript(Domains: type) type {
 
 test "conformance" {
     var s1 = Strobe128.init("Conformance Test Protocol");
-    const msg: [1024]u8 = .{99} ** 1024;
+    const msg: [1024]u8 = @splat(99);
 
     s1.metaAd("ms", false);
     s1.metaAd("g", true);
     s1.ad(&msg, false);
 
-    var prf1: [32]u8 = .{0} ** 32;
+    var prf1: [32]u8 = @splat(0);
     s1.metaAd("prf", false);
     s1.prf(&prf1, false);
 
