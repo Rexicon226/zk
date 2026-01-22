@@ -194,7 +194,7 @@ const bn254 = struct {
         std.debug.assert(valid.len % 192 == 0);
 
         const N = 192 * 10;
-        var buffer: [N]u8 = .{0} ** N;
+        var buffer: [N]u8 = @splat(0);
         const input = try std.fmt.hexToBytes(&buffer, valid);
 
         for (0..input.len / 192) |j| {

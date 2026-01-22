@@ -831,7 +831,7 @@ test "pairing" {
     };
     for (cases) |case| {
         const N = 192 * 10;
-        var buffer: [N]u8 = .{0} ** N;
+        var buffer: [N]u8 = @splat(0);
         const input = try std.fmt.hexToBytes(&buffer, case.input);
 
         const G1 = Bn254.G1;

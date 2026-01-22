@@ -95,7 +95,7 @@ pub fn initOpening(comptime T: type, value: T, opening: *const Opening) Commitme
 /// Converts an integer `value` to a `Scalar` by writing its little-endian
 /// representation into a 32-byte buffer and performing 5 barret reductions.
 pub fn scalarFromInt(comptime T: type, value: T) Scalar {
-    var buffer: [32]u8 = .{0} ** 32;
+    var buffer: [32]u8 = @splat(0);
     std.mem.writeInt(T, buffer[0..@sizeOf(T)], value, .little);
     return Scalar.fromBytes(buffer);
 }

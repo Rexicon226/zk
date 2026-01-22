@@ -35,7 +35,7 @@ const Domain = enum {
 pub fn Proof(bit_size: comptime_int) type {
     std.debug.assert(std.math.isPowerOfTwo(bit_size));
     const logn: u64 = std.math.log2_int(u64, bit_size);
-    const max = (2 * bit_size) + (2 * logn) + 5 + 8;
+    const max = (2 * bit_size) + (2 * logn) + 8 + 5;
 
     const AmountInt = std.meta.Int(.unsigned, bit_size);
     const BitInt = std.math.IntFittingRange(0, bit_size);
