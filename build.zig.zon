@@ -1,6 +1,12 @@
 .{
     .name = .zk,
     .version = "0.1.0",
+    .dependencies = .{
+        // .fuzz = .{
+        //     .url = "git+https://github.com/SuperAuguste/zig-libfuzzer-kit#40ebdb761db27b4c37d4c69d397bc82bd899b51c",
+        //     .hash = "libfuzzer_kit-0.0.0-i7XWVoCRBwCW0ujzvRqsyUxZyJHJH4irdGgoTrX6fv80",
+        // },
+    },
     .fingerprint = 0x4e693b53f5a7b4ac,
     .paths = .{
         "LICENSE",

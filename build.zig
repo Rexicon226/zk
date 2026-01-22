@@ -107,4 +107,35 @@ pub fn build(b: *std.Build) !void {
     const run_benchmark = b.addRunArtifact(benchmark_exe);
     if (b.args) |args| run_benchmark.addArgs(args);
     benchmark_step.dependOn(&run_benchmark.step);
+
+    // fuzzing
+    // const libfuzz = b.dependency("fuzz", .{
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+    // const fuzz_obj = b.addObject(.{
+    //     .name = "zigfuzz",
+    //     .root_module = b.createModule(.{
+    //         .root_source_file = b.path("src/fuzz.zig"),
+    //         .target = target,
+    //         .optimize = optimize,
+    //         .fuzz = true,
+    //     }),
+    // });
+    // fuzz_obj.root_module.fuzz = true;
+
+    // const fuzz_exe = b.addExecutable(.{
+    //     .name = "fuzz",
+    //     .root_module = b.createModule(.{
+    //         .target = target,
+    //         .optimize = optimize,
+    //     }),
+    // });
+    // fuzz_exe.addCSourceFile(.{ .file = libfuzz.path("src/FuzzerMain.cpp") });
+    // fuzz_exe.linkLibrary(libfuzz.artifact("fuzzer"));
+    // fuzz_exe.addObject(fuzz_obj);
+
+    // const run_fuzz = b.step("fuzz", "Run the fuzzing");
+    // run_fuzz.dependOn(&b.addRunArtifact(fuzz_exe).step);
+    // b.installArtifact(fuzz_exe);
 }
