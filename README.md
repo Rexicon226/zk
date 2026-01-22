@@ -11,6 +11,7 @@ Some notable implementations:
 - AVX512 (52-bit limb) Edwards25519
 - EdDSA 225 (compatible with `curve25519-dalek`)
 - Fiat-Shamir transcripts (comptime verified to be used correctly)
+- [Strobe](https://strobe.sourceforge.io/) implementation
 - Basic finite field implementation, to-be-optimized
 - Short Weierstrass 
     - BLS12-381
