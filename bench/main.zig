@@ -42,8 +42,10 @@ pub fn main() !void {
         false => "generic (avx2/neon)",
     }});
 
-    if (filter.run(.falcon)) {
-        try falcon.run();
+    inline for (@typeInfo(Filter).@"enum".fields[1..]) |field| {
+        if (filter.run(@field(Filter, field.name))) {
+            try @field(@This(), field.name).run();
+        }
     }
 }
 

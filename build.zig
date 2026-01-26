@@ -164,7 +164,11 @@ fn addTable(
     });
     mod.addOptions("build_options", options);
 
-    const generator = b.addExecutable(.{ .name = name, .root_module = mod });
+    const generator = b.addExecutable(.{
+        .name = name,
+        .root_module = mod,
+        .use_llvm = true,
+    });
     const run_generator = b.addRunArtifact(generator);
     const output = run_generator.captureStdOut();
     // TODO: Working around Zig 0.15 bug here, update when it's fixed.
