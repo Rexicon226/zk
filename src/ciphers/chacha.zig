@@ -63,7 +63,7 @@ pub fn ChaCha(comptime rounds: enum { eight, twenty }) type {
         buffers: [num_lanes][64 * 4]u8 align(@alignOf(V)),
         counter: u64,
         /// Number of u64s read from buffers.
-        read: u64,
+        read: usize,
 
         // When compiling for AVX512 enabled target, we use two interleaved 4x4 kernels (lanes == 2).
         // For AVX2 (and things like aarch64 apple_m3), we set lanes = 1 in order to not have it spill into another loop.

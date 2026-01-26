@@ -158,7 +158,7 @@ pub fn Proof(bit_size: comptime_int) type {
             const a_blinding: Scalar = .random();
             var A = pedersen.H.mul(a_blinding.toBytes()) catch unreachable;
 
-            var bit: u64 = 0;
+            var bit: usize = 0;
             for (amounts, bit_lengths) |amount, n| {
                 for (0..n) |j| {
                     // init functions aren't exposed, so doesn't need to be constant time.
@@ -421,8 +421,8 @@ pub fn Proof(bit_size: comptime_int) type {
             var exp_z = zz;
             var z_and_2 = exp_z;
             var exp_y_inv = y;
-            var j: u64 = 0;
-            var m: u64 = 0;
+            var j: usize = 0;
+            var m: usize = 0;
             const y_inv = y.invert();
             for (0..bit_size) |i| {
                 defer j += 1;

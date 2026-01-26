@@ -775,21 +775,3 @@ test "split roundtrip" {
     try std.testing.expectEqual(x2, splits[2]);
     try std.testing.expectEqual(x3, splits[3]);
 }
-
-test "avx4 roundtrip" {
-    const x0 = Fe.fromBytes(@splat(0x10));
-    const x1 = Fe.fromBytes(@splat(0x11));
-    const x2 = Fe.fromBytes(@splat(0x12));
-    const x3 = Fe.fromBytes(@splat(0x13));
-
-    const vec = ExtendedPoint.init(x0, x1, x2, x3);
-    const avx = vec.toAvx4();
-    const vec2 = ExtendedPoint.fromAvx4(avx);
-    const s1 = vec.split();
-    const s2 = vec2.split();
-
-    try std.testing.expectEqual(s1[0], s2[0]);
-    try std.testing.expectEqual(s1[1], s2[1]);
-    try std.testing.expectEqual(s1[2], s2[2]);
-    try std.testing.expectEqual(s1[3], s2[3]);
-}

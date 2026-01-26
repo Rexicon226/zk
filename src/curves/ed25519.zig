@@ -135,7 +135,7 @@ fn NafLookupTable(N: comptime_int) type {
             return .{ .table = Ai };
         }
 
-        fn select(self: Self, index: u64) CachedPoint {
+        fn select(self: Self, index: usize) CachedPoint {
             std.debug.assert(index & 1 == 1); // make sur ethe index is odd
             std.debug.assert(index < N * 2);
             return self.table[index / 2];
@@ -150,7 +150,7 @@ pub fn doubleBaseMul(a: CompressedScalar, A: Edwards25519, b: CompressedScalar) 
 
     // Search through our NAFs to find the first index that will actually affect the outcome.
     // Otherwise the prepending 0s added by `asNaf` will just keep doubling the identityElement.
-    var i: u64 = std.math.maxInt(u8);
+    var i: usize = std.math.maxInt(u8);
     for (0..256) |rev| {
         i = 256 - rev - 1;
         if (a_naf[i] != 0 or b_naf[i] != 0) break;
@@ -195,8 +195,8 @@ fn asNaf(a: CompressedScalar, w: comptime_int) [256]i8 {
     const width = 1 << w;
     const window_mask = width - 1;
 
-    var pos: u64 = 0;
-    var carry: u64 = 0;
+    var pos: usize = 0;
+    var carry: usize = 0;
     while (pos < 256) {
         const idx = pos / 64;
         const bit_idx: std.math.Log2Int(u64) = @intCast(pos % 64);
