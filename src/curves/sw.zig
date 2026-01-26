@@ -288,8 +288,6 @@ pub fn ShortWeierstrass(
         }
 
         /// https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd-2007-bl
-        ///
-        /// NOTE: the argument are "reversed", `(X1, Y1, Z1)` is `a` and `(X2, Y2, Z2)` is `b`.
         pub fn addAffine(a: Self, b: Affine) Self {
             // b==0, return a
             if (a.isZero()) return b.toProjective();

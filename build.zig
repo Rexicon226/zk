@@ -4,26 +4,11 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // module
-
     const stdx = b.createModule(.{
         .root_source_file = b.path("src/stdx.zig"),
         .target = target,
         .optimize = optimize,
     });
-
-    const generator_chain = b.addExecutable(.{
-        .name = "generator_chain",
-        .root_module = b.createModule(.{
-            .target = b.graph.host,
-            // Overall it takes less time to compile in debug mode than the perf gain from a release mode at runtime
-            .optimize = .Debug,
-            .root_source_file = b.path("src/range_proofs/bulletproofs/generator_chain.zig"),
-        }),
-    });
-    const run_generator_chain = b.addRunArtifact(generator_chain);
-    const generator_chain_output = run_generator_chain.captureStdOut();
-    run_generator_chain.captured_stdout.?.basename = "table.zig";
 
     const test_filters = b.option(
         []const []const u8,
@@ -41,10 +26,35 @@ pub fn build(b: *std.Build) !void {
             .{ .name = "stdx", .module = stdx },
         },
     });
-    zk_mod.addAnonymousImport(
-        "bullet_table",
-        .{ .root_source_file = generator_chain_output },
+
+    const result = target.result;
+    const has_avx512 = result.cpu.arch == .x86_64 and
+        result.cpu.has(.x86, .avx512ifma) and
+        result.cpu.has(.x86, .avx512vl);
+    const use_avx512 = has_avx512 and use_llvm;
+
+    const options = b.addOptions();
+    options.addOption(bool, "use_avx512", use_avx512);
+    zk_mod.addOptions("build_options", options);
+
+    // Add the precomputed tables
+
+    const generator_chain = addTable(
+        b,
+        options,
+        "generator_chain",
+        "src/range_proofs/bulletproofs/generator_chain.zig",
+        .zig,
     );
+    zk_mod.addAnonymousImport("bullet_table", .{ .root_source_file = generator_chain });
+    const ed25519_base_table = addTable(
+        b,
+        options,
+        "ed25519_base_table",
+        "src/curves/ed25519/gen_base_table.zig",
+        .zon,
+    );
+    zk_mod.addAnonymousImport("ed25519_base_table", .{ .root_source_file = ed25519_base_table });
 
     // tests
 
@@ -138,4 +148,30 @@ pub fn build(b: *std.Build) !void {
     // const run_fuzz = b.step("fuzz", "Run the fuzzing");
     // run_fuzz.dependOn(&b.addRunArtifact(fuzz_exe).step);
     // b.installArtifact(fuzz_exe);
+}
+
+fn addTable(
+    b: *std.Build,
+    options: *std.Build.Step.Options,
+    name: []const u8,
+    path: []const u8,
+    ty: enum { zon, zig },
+) std.Build.LazyPath {
+    const mod = b.createModule(.{
+        .target = b.graph.host,
+        .optimize = .Debug,
+        .root_source_file = b.path(path),
+    });
+    mod.addOptions("build_options", options);
+
+    const generator = b.addExecutable(.{ .name = name, .root_module = mod });
+    const run_generator = b.addRunArtifact(generator);
+    const output = run_generator.captureStdOut();
+    // TODO: Working around Zig 0.15 bug here, update when it's fixed.
+    run_generator.captured_stdout.?.basename = switch (ty) {
+        .zon => "table.zon",
+        .zig => "table.zig",
+    };
+
+    return output;
 }

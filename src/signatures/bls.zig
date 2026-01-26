@@ -1,5 +1,5 @@
 const bls = @import("../curves/bls.zig");
-const G1 = bls.BLS12_381.G1;
+const G1 = bls.Bls12_381.G1;
 
 const PublicKey = struct {};
 

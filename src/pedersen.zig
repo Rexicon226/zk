@@ -108,7 +108,7 @@ pub fn scalarFromInt(comptime T: type, value: T) Scalar {
 ///
 /// The public key is a pedersen commitment to the secret:
 ///
-/// $P = {G^x}{H^x}$
+/// $P = {G^x}{H^r}$
 pub const PublicKey = struct {
     p: Commitment,
 

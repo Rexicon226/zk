@@ -213,7 +213,7 @@ pub fn Transcript(Domains: type) type {
         }
 
         fn appendMessage(t: *T, label: []const u8, message: Message) void {
-            var buffer: [64]u8 = @splat(0);
+            var buffer: [8]u8 = @splat(0);
             const bytes: []const u8 = switch (message) {
                 .bytes => |b| b,
                 .point => |*point| &point.toBytes(),
