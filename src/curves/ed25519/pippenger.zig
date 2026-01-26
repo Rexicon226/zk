@@ -31,19 +31,19 @@ fn asRadix2w(c: CompressedScalar, w: u6) [64]i8 {
     const window_mask = radix - 1;
 
     var carry: u64 = 0;
-    const digits_count = (@as(u64, 256) + w - 1) / w;
+    const digits_count = (@as(usize, 256) + w - 1) / w;
     var digits: [64]i8 = @splat(0);
 
     for (0..digits_count) |i| {
         const bit_offset = i * w;
-        const u64_idx = bit_offset / 64;
+        const small_idx: usize = @intCast(bit_offset / 64);
         const bit_idx: u6 = @truncate(bit_offset);
-        const element = scalars[u64_idx] >> bit_idx;
+        const element = scalars[small_idx] >> bit_idx;
 
-        const below = bit_idx < @as(u64, 64) - w or u64_idx == 3;
+        const below = bit_idx < @as(u64, 64) - w or small_idx == 3;
         const bit_buf: u64 = switch (below) {
             true => element,
-            else => element | (scalars[1 + u64_idx] << @intCast(@as(u64, 64) - bit_idx)),
+            else => element | (scalars[1 + small_idx] << @intCast(@as(u64, 64) - bit_idx)),
         };
 
         const coef = carry + (bit_buf & window_mask);
@@ -77,9 +77,9 @@ pub fn mulMultiRuntime(
         else => 8,
     };
 
-    const max_digit = @as(u64, 1) << w;
+    const max_digit = @as(usize, 1) << w;
     const buckets_count = max_digit / 2;
-    const digits_count = (@as(u64, 256) + w - 1) / switch (w) {
+    const digits_count = (@as(usize, 256) + w - 1) / switch (w) {
         4...7 => w,
         8 => w + 1,
         else => unreachable,
@@ -117,11 +117,11 @@ pub fn mulMultiRuntime(
             const digit: i16 = digits[digit_index]; // avoid issues when w is 8
             switch (std.math.order(digit, 0)) {
                 .gt => {
-                    const b: u64 = @intCast(digit - 1);
+                    const b: usize = @intCast(digit - 1);
                     buckets[b] = buckets[b].addCached(pt);
                 },
                 .lt => {
-                    const b: u64 = @intCast(-digit - 1);
+                    const b: usize = @intCast(-digit - 1);
                     buckets[b] = buckets[b].subCached(pt);
                 },
                 .eq => {},

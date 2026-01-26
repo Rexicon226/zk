@@ -35,8 +35,8 @@ const Scalar = std.crypto.ecc.Edwards25519.scalar.Scalar;
 /// - Bulletproofs paper (Bünz et al., 2018): https://eprint.iacr.org/2017/1066
 /// - Dalek Bulletproofs implementation and docs: https://doc.dalek.rs/bulletproofs/
 /// - Agave IPP implementation: https://github.com/anza-xyz/agave/blob/93699947720534741b2b4d9b6e1696d81e386dcc/zk-sdk/src/range_proof/inner_product.rs
-pub fn Proof(comptime bit_size: u64) type {
-    const logn: u64 = std.math.log2_int(u64, bit_size);
+pub fn Proof(comptime bit_size: usize) type {
+    const logn: usize = std.math.log2_int(usize, bit_size);
     const max_elements =
         bit_size * 2 + // g_times_a_times_s and h_times_b_div_s
         logn * 2 + // neg_u_sq and neg_u_inv_sq
@@ -298,8 +298,8 @@ pub fn Proof(comptime bit_size: u64) type {
             var s: [bit_size]Scalar = undefined;
             s[0] = allinv;
             for (1..bit_size) |i| {
-                const log_i = std.math.log2_int(u64, i);
-                const k = @as(u64, 1) << log_i;
+                const log_i = std.math.log2_int(usize, i);
+                const k = @as(usize, 1) << log_i;
                 const u_lg_i_sq = challenges[logn - 1 - log_i];
                 s[i] = s[i - k].mul(u_lg_i_sq);
             }

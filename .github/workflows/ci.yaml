@@ -1,22 +1,69 @@
+name: CI
+
 on:
-    pull_request:
-    push:
-      branches:
-        - master
+  pull_request:
+  push:
+    branches:
+      - master
 
 jobs:
-    test:
-        runs-on: ubuntu-latest
-        steps:
-          - uses: actions/checkout@v2
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            zig-target: x86_64-linux
+            cpu: baseline
+            run-test: true
 
-          - name: setup-zig
-            uses: mlugg/setup-zig@v2
-            with:
-                version: 0.15.2
+          - os: ubuntu-latest
+            zig-target: x86_64-linux
+            cpu: znver4
+            run-test: false
 
-          - name: build
-            run: zig build
+          - os: macos-latest
+            zig-target: x86_64-macos
+            cpu: baseline
+            run-test: true
 
-          - name: test
-            run: zig build test --summary all
+          - os: windows-latest
+            zig-target: x86_64-windows
+            cpu: baseline
+            run-test: true
+
+          - os: ubuntu-latest
+            zig-target: aarch64-linux
+            cpu: baseline
+            qemu: true
+            run-test: true
+
+          - os: ubuntu-latest
+            zig-target: arm-linux
+            cpu: baseline
+            qemu: true
+            run-test: true
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Install QEMU
+        if: matrix.qemu
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user qemu-user-static
+
+      - name: Build 
+        run: |
+          zig build -Dtarget=${{ matrix.zig-target }} -Dcpu=${{ matrix.cpu }}
+
+      - name: Run Tests
+        if: matrix.run-test
+        run: |
+          zig build test -Dtarget=${{ matrix.zig-target }} -Dcpu=${{ matrix.cpu }}

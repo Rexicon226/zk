@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub fn BigInt(comptime bits: comptime_int) type {
     return extern struct {
@@ -187,6 +188,8 @@ const helpers = struct {
 };
 
 test "init" {
+    if (@bitSizeOf(usize) != 64) return error.SkipZigTest;
+
     const B = BigInt(64);
     {
         const a = B.int(10);
@@ -199,6 +202,8 @@ test "init" {
 }
 
 test "adc" {
+    if (@bitSizeOf(usize) != 64) return error.SkipZigTest;
+
     {
         var a: u64 = 5;
         const carry = helpers.adc(&a, 10, 0);
@@ -226,6 +231,8 @@ test "adc" {
 }
 
 test "adc small" {
+    if (@bitSizeOf(usize) != 64) return error.SkipZigTest;
+
     {
         var a: u64 = 5;
         const carry = helpers.adcSmall(&a, 10, 0);
@@ -253,6 +260,8 @@ test "adc small" {
 }
 
 test "adc no carry" {
+    if (@bitSizeOf(usize) != 64) return error.SkipZigTest;
+
     {
         const carry: u64 = 0;
         const result = helpers.adcNoCarry(5, 10, &carry);
@@ -274,6 +283,8 @@ test "adc no carry" {
 }
 
 test "sbb" {
+    if (@bitSizeOf(usize) != 64) return error.SkipZigTest;
+
     {
         var a: u64 = 15;
         const borrow = helpers.sbb(&a, 5, 0);
@@ -301,6 +312,8 @@ test "sbb" {
 }
 
 test "sbb small" {
+    if (@bitSizeOf(usize) != 64) return error.SkipZigTest;
+
     {
         var a: u64 = 15;
         const borrow = helpers.sbbSmall(&a, 5, 0);
@@ -328,6 +341,8 @@ test "sbb small" {
 }
 
 test "mac" {
+    if (@bitSizeOf(usize) != 64) return error.SkipZigTest;
+
     {
         var carry: u64 = 0;
         const result = helpers.mac(1, 2, 3, &carry);
@@ -343,6 +358,8 @@ test "mac" {
 }
 
 test "mac discard" {
+    if (@bitSizeOf(usize) != 64) return error.SkipZigTest;
+
     {
         var carry: u64 = 0;
         helpers.macDiscard(1, 2, 3, &carry);
@@ -356,6 +373,8 @@ test "mac discard" {
 }
 
 test "mac with carry" {
+    if (@bitSizeOf(usize) != 64) return error.SkipZigTest;
+
     {
         var carry: u64 = 0;
         helpers.macDiscard(1, 2, 3, &carry);
@@ -371,6 +390,8 @@ test "mac with carry" {
 // Test cases copied from arkworks/algebra
 // https://github.com/arkworks-rs/algebra/blob/750e28aab9fb5d66d4b7f8d8d9510bba633ae89d/ff/src/biginteger/tests.rs
 test "general" {
+    if (@bitSizeOf(usize) != 64) return error.SkipZigTest;
+
     const S = struct {
         fn run(comptime size: usize, one: comptime_int, two: comptime_int) !void {
             const B = BigInt(size);
