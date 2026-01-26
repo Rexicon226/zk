@@ -128,6 +128,7 @@ fn NafLookupTable(N: comptime_int) type {
         const Self = @This();
 
         fn init(point: Edwards25519) callconv(convention) Self {
+            @setEvalBranchQuota(1000 * N);
             const A: ExtendedPoint = .fromPoint(point);
             var Ai: [N]CachedPoint = @splat(.fromExtended(A));
             const A2 = A.dbl();
@@ -157,7 +158,7 @@ pub fn doubleBaseMul(a: CompressedScalar, A: Edwards25519, b: CompressedScalar) 
     }
 
     const table_A: NafLookupTable(8) = .init(A);
-    const table_B: NafLookupTable(64) = @import("ed25519_base_table");
+    const table_B: NafLookupTable(64) = comptime .init(.basePoint);
 
     var Q: ExtendedPoint = .identityElement;
     while (true) {

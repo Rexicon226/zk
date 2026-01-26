@@ -19,7 +19,7 @@ jobs:
 
           - os: ubuntu-latest
             zig-target: x86_64-linux
-            cpu: znver4
+            cpu: tigerlake
             run-test: false
 
           - os: macos-latest
