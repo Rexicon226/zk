@@ -128,7 +128,7 @@ fn NafLookupTable(N: comptime_int) type {
         const Self = @This();
 
         fn init(point: Edwards25519) callconv(convention) Self {
-            @setEvalBranchQuota(1000 * N);
+            @setEvalBranchQuota(5000 * N);
             const A: ExtendedPoint = .fromPoint(point);
             var Ai: [N]CachedPoint = @splat(.fromExtended(A));
             const A2 = A.dbl();
