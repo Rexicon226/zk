@@ -201,24 +201,48 @@ fn Falcon(N: u32) type {
                 return @intCast(reduced + QV * @intFromBool(predicate));
             }
 
-            fn add(a: Fq, b: Fq) Fq {
+            fn vector(L: u32) type {
+                return struct {
+                    const Fv = @Vector(L, u32);
+                    const Ql: Fv = @splat(Q);
+
+                    inline fn add(a: Fv, b: Fv) Fv {
+                        const s = a +% b;
+                        const d, const n: Fv = @subWithOverflow(s, Ql);
+                        const r = d +% (Ql * n);
+                        return r;
+                    }
+                    inline fn sub(a: Fv, b: Fv) Fv {
+                        return @This().add(a, @This().neg(b));
+                    }
+                    inline fn neg(a: Fv) Fv {
+                        const r = Ql - a;
+                        return r * @intFromBool(a != @as(Fv, @splat(0)));
+                    }
+                    inline fn mul(a: Fv, b: Fv) Fv {
+                        return (a * b) % Ql;
+                    }
+                };
+            }
+
+            inline fn add(a: Fq, b: Fq) Fq {
                 const s = a.data +% b.data;
                 const d, const n: u32 = @subWithOverflow(s, Q);
                 const r = d +% (Q * n);
                 return .{ .data = r };
             }
-            fn sub(a: Fq, b: Fq) Fq {
+            inline fn sub(a: Fq, b: Fq) Fq {
                 return a.add(b.neg());
             }
-            fn neg(a: Fq) Fq {
+            inline fn neg(a: Fq) Fq {
                 const r = Q - a.data;
                 return .{ .data = r * @intFromBool(a.data != 0) };
             }
-            fn mul(a: Fq, b: Fq) Fq {
+            inline fn mul(a: Fq, b: Fq) Fq {
                 return .{ .data = (a.data * b.data) % Q };
             }
 
-            fn balanced(a: Fq) i16 {
+            inline fn balanced(a: Fq) i16 {
                 const value: i16 = @intCast(a.data);
                 const g: i16 = @intFromBool(value > Q / 2);
                 return value - Q * g;
@@ -287,7 +311,6 @@ fn Falcon(N: u32) type {
                     }
                     return .{ .coeff = out };
                 }
-
                 /// Compute the evaluations of the polynomial on the roots of the
                 /// polynomial X^n + 1 using a fast Fourier transform.
                 ///
@@ -304,11 +327,30 @@ fn Falcon(N: u32) type {
                             const j1 = 2 * i * t;
                             const j2 = j1 + t - 1;
                             const s = precompute.positive[m + i];
-                            for (j1..j2 + 1) |j| {
-                                const u = a[j];
-                                const v = a[j + t].mul(s);
-                                a[j] = u.add(v);
-                                a[j + t] = u.sub(v);
+                            switch ((j2 + 1) - j1) {
+                                256, 128, 64, 32 => |distance| {
+                                    for (0..distance) |b| {
+                                        const u = a[j1 + b];
+                                        const v = a[j1 + t + b].mul(s);
+                                        a[j1 + b] = u.add(v);
+                                        a[j1 + t + b] = u.sub(v);
+                                    }
+                                },
+                                inline 16, 8, 4, 2 => |distance| {
+                                    const vector = Fq.vector(distance);
+                                    const Fv = vector.Fv;
+                                    const u: Fv = @bitCast(a[j1..][0..distance].*);
+                                    const v: Fv = vector.mul(@bitCast(a[j1 + t ..][0..distance].*), @splat(s.data));
+                                    a[j1..][0..distance].* = @bitCast(vector.add(u, v));
+                                    a[j1 + t ..][0..distance].* = @bitCast(vector.sub(u, v));
+                                },
+                                1 => {
+                                    const u = a[j1];
+                                    const v = a[j1 + t].mul(s);
+                                    a[j1] = u.add(v);
+                                    a[j1 + t] = u.sub(v);
+                                },
+                                else => unreachable,
                             }
                         }
                         m *= 2;
