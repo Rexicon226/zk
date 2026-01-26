@@ -2,13 +2,21 @@
 //! https://github.com/dalek-cryptography/curve25519-dalek/tree/c3f91f762042debf7c516c21ad9b9a2a9f4ef3b8/curve25519-dalek/src/backend/vector/ifma
 
 const std = @import("std");
+const builtin = @import("builtin");
 const Ed25519 = std.crypto.ecc.Edwards25519;
 const Fe = Ed25519.Fe;
+
+// NOTE: We allow for emulating the arithmetic behaviour of vpmadd52*,
+// only for the usecases of generating precomputed tables and testing.
+// The emulations are super slow, and shouldn't be used in practice,
+// instead using the generic.zig implementation.
+const has_avx512 = builtin.cpu.arch == .x86_64 and
+    builtin.cpu.has(.x86, .avx512ifma) and
+    builtin.cpu.has(.x86, .avx512vl);
 
 const u32x8 = @Vector(8, u32);
 const i32x8 = @Vector(8, i32);
 const u64x4 = @Vector(4, u64);
-const u52x4 = @Vector(4, u52);
 
 // TODO: there's no inherent limitation from using inline assembly instead,
 // however this currently (Zig 0.14.1) crashes both LLVM and the self-hosted backend.
@@ -18,8 +26,10 @@ extern fn @"llvm.x86.avx512.vpmadd52l.uq.256"(u64x4, u64x4, u64x4) u64x4;
 extern fn @"llvm.x86.avx512.vpmadd52h.uq.256"(u64x4, u64x4, u64x4) u64x4;
 
 inline fn madd52lo(x: u64x4, y: u64x4, z: u64x4) u64x4 {
-    if (@inComptime()) {
+    if (@inComptime() or !has_avx512) {
         const V = @Vector(4, u128);
+        const u52x4 = @Vector(4, u52);
+
         const tsrc2: u52x4 = @truncate(z);
         const temp128 = @as(V, @as(u52x4, @truncate(y))) * @as(V, tsrc2);
         return x + @as(u52x4, @truncate(temp128));
@@ -29,8 +39,10 @@ inline fn madd52lo(x: u64x4, y: u64x4, z: u64x4) u64x4 {
 }
 
 inline fn madd52hi(x: u64x4, y: u64x4, z: u64x4) u64x4 {
-    if (@inComptime()) {
+    if (@inComptime() or !has_avx512) {
         const V = @Vector(4, u128);
+        const u52x4 = @Vector(4, u52);
+
         const tsrc2: u52x4 = @truncate(z);
         const temp128 = @as(V, @as(u52x4, @truncate(y))) * @as(V, tsrc2);
         return x + @as(u52x4, @truncate(temp128 >> @splat(52)));
@@ -41,6 +53,11 @@ inline fn madd52hi(x: u64x4, y: u64x4, z: u64x4) u64x4 {
 
 /// A vector of four field elements.
 pub const ExtendedPoint = struct {
+    /// [ X0, Y0, Z0, T0 ]
+    /// [ X1, Y1, Z1, T1 ]
+    /// [ X2, Y2, Z2, T2 ]
+    /// [ X3, Y3, Z3, T3 ]
+    /// [ X4, Y4, Z4, T4 ]
     limbs: [5]u64x4,
 
     pub const zero: ExtendedPoint = .{ .limbs = @splat(@splat(0)) };
@@ -215,11 +232,11 @@ pub const CachedPoint = struct {
 
     // zig fmt: off
     pub const identityElement: CachedPoint = .{ .limbs = .{
-        .{ 121647,           121666, 243332, 2251799813685229 },
-        .{ 2251799813685248, 0,      0,      2251799813685247 },
-        .{ 2251799813685247, 0,      0,      2251799813685247 },
-        .{ 2251799813685247, 0,      0,      2251799813685247 },
-        .{ 2251799813685247, 0,      0,      2251799813685247 },
+        .{ 121647,          121666, 243332, 0x7FFFFFFFFFFED },
+        .{ 0x8000000000000, 0,      0,      0x7FFFFFFFFFFFF },
+        .{ 0x7FFFFFFFFFFFF, 0,      0,      0x7FFFFFFFFFFFF },
+        .{ 0x7FFFFFFFFFFFF, 0,      0,      0x7FFFFFFFFFFFF },
+        .{ 0x7FFFFFFFFFFFF, 0,      0,      0x7FFFFFFFFFFFF },
     } };
     // zig fmt: on
 

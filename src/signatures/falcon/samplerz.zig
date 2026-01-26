@@ -207,9 +207,7 @@ test berExp {
 
 test samplerz {
     const sigma_min = 1.277833697;
-    // KATs from the paper, Table 3.2, Page 44
-    // https://falcon-sign.info/falcon.pdf
-    // The zeros were added to account for dropped bytes.
+    // https://falcon-sign.info/falcon.pdf, Table 3.2, Page 44
     const kats = [_]struct { f64, f64, []const u8, i16 }{
         .{ -91.90471153063714, 1.7037990414754918, "0fc5442ff043d66e91d1eacac64ea5450a22941edc6c", -92 },
         .{ -8.322564895434937, 1.7037990414754918, "f4da0f8d8444d1a77265c2ef6f98bbbb4bee7db8d9b3", -8 },

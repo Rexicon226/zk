@@ -58,7 +58,7 @@ fn Proof(comptime C: type, n: comptime_int, ell: comptime_int) type {
     };
 }
 
-const bls = @import("../curves/bls.zig").BLS12_381;
+const bls = @import("../curves/bls.zig").Bls12_381;
 test "dekart" {
     const P = Proof(bls, 31, 16);
     _ = P.setup();

@@ -58,17 +58,24 @@ const P_TIMES_16_HI: u32x8 = .{
 const LOW_25_BITS: u64x4 = @splat((@as(u64, 1) << 25) - 1);
 const LOW_26_BITS: u64x4 = @splat((@as(u64, 1) << 26) - 1);
 
-/// A vector of four field elements.
 pub const ExtendedPoint = struct {
+    /// Limbs are represented as:
+    /// [  X0_lo, Y0_lo, X0_hi, Y0_hi, Z0_lo, T0_lo, Z0_hi, T0_hi ]
+    /// [  X1_lo, Y1_lo, X1_hi, Y1_hi, Z1_lo, T1_lo, Z1_hi, T1_hi ]
+    /// [  X2_lo, Y2_lo, X2_hi, Y2_hi, Z2_lo, T2_lo, Z2_hi, T2_hi ]
+    /// [  X3_lo, Y3_lo, X3_hi, Y3_hi, Z3_lo, T3_lo, Z3_hi, T3_hi ]
+    /// [  X4_lo, Y4_lo, X4_hi, Y4_hi, Z4_lo, T4_lo, Z4_hi, T4_hi ]
+    ///
+    /// Where X0 = (X0_hi << 26) + X0_lo.
     limbs: [5]u32x8,
 
     pub const zero: ExtendedPoint = .{ .limbs = @splat(@splat(0)) };
     pub const identityElement: ExtendedPoint = .{ .limbs = .{
         .{ 0, 1, 0, 0, 1, 0, 0, 0 },
-        @splat(0),
-        @splat(0),
-        @splat(0),
-        @splat(0),
+        .{ 0, 0, 0, 0, 0, 0, 0, 0 },
+        .{ 0, 0, 0, 0, 0, 0, 0, 0 },
+        .{ 0, 0, 0, 0, 0, 0, 0, 0 },
+        .{ 0, 0, 0, 0, 0, 0, 0, 0 },
     } };
 
     fn init(x0: Fe, x1: Fe, x2: Fe, x3: Fe) ExtendedPoint {
@@ -767,4 +774,22 @@ test "split roundtrip" {
     try std.testing.expectEqual(x1, splits[1]);
     try std.testing.expectEqual(x2, splits[2]);
     try std.testing.expectEqual(x3, splits[3]);
+}
+
+test "avx4 roundtrip" {
+    const x0 = Fe.fromBytes(@splat(0x10));
+    const x1 = Fe.fromBytes(@splat(0x11));
+    const x2 = Fe.fromBytes(@splat(0x12));
+    const x3 = Fe.fromBytes(@splat(0x13));
+
+    const vec = ExtendedPoint.init(x0, x1, x2, x3);
+    const avx = vec.toAvx4();
+    const vec2 = ExtendedPoint.fromAvx4(avx);
+    const s1 = vec.split();
+    const s2 = vec2.split();
+
+    try std.testing.expectEqual(s1[0], s2[0]);
+    try std.testing.expectEqual(s1[1], s2[1]);
+    try std.testing.expectEqual(s1[2], s2[2]);
+    try std.testing.expectEqual(s1[3], s2[3]);
 }

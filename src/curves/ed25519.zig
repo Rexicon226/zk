@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const build_options = @import("build_options");
 
 pub const pippenger = @import("ed25519/pippenger.zig");
 pub const straus = @import("ed25519/straus.zig");
@@ -15,13 +16,11 @@ const convention: std.builtin.CallingConvention = switch (builtin.mode) {
 
 const generic = @import("ed25519/generic.zig");
 const avx512 = @import("ed25519/avx512.zig");
-const has_avx512 = builtin.cpu.arch == .x86_64 and
-    std.Target.x86.featureSetHas(builtin.cpu.features, .avx512ifma) and
-    std.Target.x86.featureSetHas(builtin.cpu.features, .avx512vl);
-pub const use_avx125 = has_avx512 and builtin.zig_backend == .stage2_llvm;
+
+pub const use_avx512 = build_options.use_avx512;
 
 // avx512 implementation relies on llvm specific tricks
-const namespace = if (use_avx125) avx512 else generic;
+const namespace = if (use_avx512) avx512 else generic;
 pub const ExtendedPoint = namespace.ExtendedPoint;
 pub const CachedPoint = namespace.CachedPoint;
 
@@ -122,44 +121,27 @@ pub const LookupTable = struct {
     }
 };
 
-/// Similar structure to `LookupTable` but it holds odd multiples of the root point:
-/// 1A, 3A, 5A, 7A, 9A, 11A, 13A, 15A.
-const NafLookupTable5 = struct {
-    table: [8]CachedPoint,
+fn NafLookupTable(N: comptime_int) type {
+    return struct {
+        table: [N]CachedPoint,
 
-    fn init(point: Edwards25519) callconv(convention) NafLookupTable5 {
-        const A: ExtendedPoint = .fromPoint(point);
-        var Ai: [8]CachedPoint = @splat(.fromExtended(A));
-        const A2 = A.dbl();
-        for (0..7) |i| Ai[i + 1] = .fromExtended(A2.addCached(Ai[i]));
-        return .{ .table = Ai };
-    }
+        const Self = @This();
 
-    fn select(self: NafLookupTable5, index: u64) CachedPoint {
-        std.debug.assert(index & 1 == 1); // make sure the index is odd
-        std.debug.assert(index < 16); // fits inside
-        return self.table[index / 2];
-    }
-};
+        fn init(point: Edwards25519) callconv(convention) Self {
+            const A: ExtendedPoint = .fromPoint(point);
+            var Ai: [N]CachedPoint = @splat(.fromExtended(A));
+            const A2 = A.dbl();
+            for (0..N - 1) |i| Ai[i + 1] = .fromExtended(A2.addCached(Ai[i]));
+            return .{ .table = Ai };
+        }
 
-/// Same thing as `NafLookupTable5` but just stores points for radix 2^8 instead of 2^5
-const NafLookupTable8 = struct {
-    table: [64]CachedPoint,
-
-    fn init(point: Edwards25519) callconv(convention) NafLookupTable8 {
-        const A: ExtendedPoint = .fromPoint(point);
-        var Ai: [64]CachedPoint = @splat(.fromExtended(A));
-        const A2 = A.dbl();
-        for (0..63) |i| Ai[i + 1] = .fromExtended(A2.addCached(Ai[i]));
-        return .{ .table = Ai };
-    }
-
-    fn select(self: NafLookupTable8, index: u64) CachedPoint {
-        std.debug.assert(index & 1 == 1); // make sure the index is odd
-        std.debug.assert(index < 128);
-        return self.table[index / 2];
-    }
-};
+        fn select(self: Self, index: u64) CachedPoint {
+            std.debug.assert(index & 1 == 1); // make sur ethe index is odd
+            std.debug.assert(index < N * 2);
+            return self.table[index / 2];
+        }
+    };
+}
 
 /// Compute `(aA + bB)`, in variable time, where `B` is the Ed25519 basepoint.
 pub fn doubleBaseMul(a: CompressedScalar, A: Edwards25519, b: CompressedScalar) Edwards25519 {
@@ -174,15 +156,8 @@ pub fn doubleBaseMul(a: CompressedScalar, A: Edwards25519, b: CompressedScalar) 
         if (a_naf[i] != 0 or b_naf[i] != 0) break;
     }
 
-    const table_A: NafLookupTable5 = .init(A);
-
-    // avx512 backend only needs ~25k quota, but avx2 one needs ~100k
-    // TODO: make comptime precompilation stuff use the avx512 one because of this
-    @setEvalBranchQuota(100_000);
-
-    // Since we are pre-computing the basePoint lookup table, we might as well pre-compute it
-    // for a larger amount of points in order to make it fast.
-    const table_B: NafLookupTable8 = comptime .init(.basePoint);
+    const table_A: NafLookupTable(8) = .init(A);
+    const table_B: NafLookupTable(64) = @import("ed25519_base_table");
 
     var Q: ExtendedPoint = .identityElement;
     while (true) {
