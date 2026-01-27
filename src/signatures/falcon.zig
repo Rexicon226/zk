@@ -336,19 +336,13 @@ fn Falcon(N: u32) type {
                                         a[j1 + t + b] = u.sub(v);
                                     }
                                 },
-                                inline 16, 8, 4, 2 => |distance| {
+                                inline 16, 8, 4, 2, 1 => |distance| {
                                     const vector = Fq.vector(distance);
                                     const Fv = vector.Fv;
                                     const u: Fv = @bitCast(a[j1..][0..distance].*);
                                     const v: Fv = vector.mul(@bitCast(a[j1 + t ..][0..distance].*), @splat(s.data));
                                     a[j1..][0..distance].* = @bitCast(vector.add(u, v));
                                     a[j1 + t ..][0..distance].* = @bitCast(vector.sub(u, v));
-                                },
-                                1 => {
-                                    const u = a[j1];
-                                    const v = a[j1 + t].mul(s);
-                                    a[j1] = u.add(v);
-                                    a[j1 + t] = u.sub(v);
                                 },
                                 else => unreachable,
                             }
@@ -376,11 +370,24 @@ fn Falcon(N: u32) type {
                             const j2 = j1 + t - 1;
                             // s = {\phi}_rev^-1[h + i]
                             const s = precompute.negative[h + i];
-                            for (j1..j2 + 1) |j| {
-                                const u = a[j];
-                                const v = a[j + t];
-                                a[j] = u.add(v);
-                                a[j + t] = (u.sub(v)).mul(s);
+                            switch ((j2 + 1) - j1) {
+                                256, 128, 64, 32 => |distance| {
+                                    for (0..distance) |b| {
+                                        const u = a[j1 + b];
+                                        const v = a[j1 + t + b];
+                                        a[j1 + b] = u.add(v);
+                                        a[j1 + t + b] = (u.sub(v)).mul(s);
+                                    }
+                                },
+                                inline 16, 8, 4, 2, 1 => |distance| {
+                                    const vector = Fq.vector(distance);
+                                    const Fv = vector.Fv;
+                                    const u: Fv = @bitCast(a[j1..][0..distance].*);
+                                    const v: Fv = @bitCast(a[j1 + t ..][0..distance].*);
+                                    a[j1..][0..distance].* = @bitCast(vector.add(u, v));
+                                    a[j1 + t ..][0..distance].* = @bitCast(vector.mul(vector.sub(u, v), @splat(s.data)));
+                                },
+                                else => unreachable,
                             }
                             // j1 = j1 + 2t
                             j1 += 2 * t;
