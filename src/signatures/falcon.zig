@@ -342,15 +342,7 @@ fn Falcon(N: u32) type {
                             const j2 = j1 + t - 1;
                             const s = precompute.positive[m + i];
                             switch ((j2 + 1) - j1) {
-                                256, 128, 64, 32 => |distance| {
-                                    for (0..distance) |b| {
-                                        const u = a[j1 + b];
-                                        const v = a[j1 + t + b].mul(s);
-                                        a[j1 + b] = u.add(v);
-                                        a[j1 + t + b] = u.sub(v);
-                                    }
-                                },
-                                inline 16, 8, 4, 2, 1 => |distance| {
+                                inline 256, 128, 64, 32, 16, 8, 4, 2, 1 => |distance| {
                                     const Fv = Fq.Vector(distance);
                                     const u: Fv = .from(a[j1..][0..distance]);
                                     const v = Fv.from(a[j1 + t ..][0..distance]).mul(.splat(s));
@@ -384,15 +376,7 @@ fn Falcon(N: u32) type {
                             // s = {\phi}_rev^-1[h + i]
                             const s = precompute.negative[h + i];
                             switch ((j2 + 1) - j1) {
-                                256, 128, 64, 32 => |distance| {
-                                    for (0..distance) |b| {
-                                        const u = a[j1 + b];
-                                        const v = a[j1 + t + b];
-                                        a[j1 + b] = u.add(v);
-                                        a[j1 + t + b] = (u.sub(v)).mul(s);
-                                    }
-                                },
-                                inline 16, 8, 4, 2, 1 => |distance| {
+                                inline 256, 128, 64, 32, 16, 8, 4, 2, 1 => |distance| {
                                     const Fv = Fq.Vector(distance);
                                     const u: Fv = .from(a[j1..][0..distance]);
                                     const v: Fv = .from(a[j1 + t ..][0..distance]);
