@@ -12,10 +12,10 @@ pub const zk_options: zk.Options = .{
 
 const Filter = enum {
     all,
-    // bulletproofs,
-    // ed25519,
-    // bn254,
-    // chacha,
+    bulletproofs,
+    ed25519,
+    bn254,
+    chacha,
     falcon,
 
     fn run(b: Filter, f: Filter) bool {
