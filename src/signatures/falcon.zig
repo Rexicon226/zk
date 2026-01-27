@@ -192,7 +192,7 @@ fn Falcon(N: u32) type {
                 return .{ .data = @intCast(reduced + Q * @as(i16, @intFromBool(value < 0))) };
             }
 
-            /// Given @Vector(4, i16), returns [init(v0), init(v1), init(v2), init(v3)].
+            /// Given @Vector(4, i16), returns [ init(v0), init(v1), init(v2), init(v3) ].
             fn initVector(value: V) @Vector(4, u32) {
                 const one: V = @splat(1);
                 const predicate = value < (one - one);
@@ -201,48 +201,61 @@ fn Falcon(N: u32) type {
                 return @intCast(reduced + QV * @intFromBool(predicate));
             }
 
-            fn vector(L: u32) type {
+            fn Vector(L: u32) type {
                 return struct {
-                    const Fv = @Vector(L, u32);
-                    const Ql: Fv = @splat(Q);
+                    data: Vl,
 
-                    inline fn add(a: Fv, b: Fv) Fv {
-                        const s = a +% b;
-                        const d, const n: Fv = @subWithOverflow(s, Ql);
-                        const r = d +% (Ql * n);
-                        return r;
+                    const Self = @This();
+                    const Vl = @Vector(L, u32);
+                    const Ql: Vl = @splat(Q);
+                    const zero: Vl = @splat(0);
+
+                    fn from(fqs: *const [L]Fq) Self {
+                        return .{ .data = @bitCast(fqs.*) };
                     }
-                    inline fn sub(a: Fv, b: Fv) Fv {
-                        return @This().add(a, @This().neg(b));
+                    fn to(a: Self) [L]Fq {
+                        return @bitCast(a.data);
                     }
-                    inline fn neg(a: Fv) Fv {
-                        const r = Ql - a;
-                        return r * @intFromBool(a != @as(Fv, @splat(0)));
+
+                    fn add(a: Self, b: Self) Self {
+                        const s = a.data +% b.data;
+                        const d, const n: Vl = @subWithOverflow(s, Ql);
+                        return .{ .data = d +% (Ql * n) };
                     }
-                    inline fn mul(a: Fv, b: Fv) Fv {
-                        return (a * b) % Ql;
+                    fn sub(a: Self, b: Self) Self {
+                        return a.add(b.neg());
+                    }
+                    fn neg(a: Self) Self {
+                        const r = Ql - a.data;
+                        return .{ .data = r * @intFromBool(a.data != zero) };
+                    }
+                    fn mul(a: Self, b: Self) Self {
+                        return .{ .data = (a.data * b.data) % Ql };
+                    }
+                    fn splat(d: Fq) Self {
+                        return .{ .data = @splat(d.data) };
                     }
                 };
             }
 
-            inline fn add(a: Fq, b: Fq) Fq {
+            fn add(a: Fq, b: Fq) Fq {
                 const s = a.data +% b.data;
                 const d, const n: u32 = @subWithOverflow(s, Q);
                 const r = d +% (Q * n);
                 return .{ .data = r };
             }
-            inline fn sub(a: Fq, b: Fq) Fq {
+            fn sub(a: Fq, b: Fq) Fq {
                 return a.add(b.neg());
             }
-            inline fn neg(a: Fq) Fq {
+            fn neg(a: Fq) Fq {
                 const r = Q - a.data;
                 return .{ .data = r * @intFromBool(a.data != 0) };
             }
-            inline fn mul(a: Fq, b: Fq) Fq {
+            fn mul(a: Fq, b: Fq) Fq {
                 return .{ .data = (a.data * b.data) % Q };
             }
 
-            inline fn balanced(a: Fq) i16 {
+            fn balanced(a: Fq) i16 {
                 const value: i16 = @intCast(a.data);
                 const g: i16 = @intFromBool(value > Q / 2);
                 return value - Q * g;
@@ -311,6 +324,7 @@ fn Falcon(N: u32) type {
                     }
                     return .{ .coeff = out };
                 }
+
                 /// Compute the evaluations of the polynomial on the roots of the
                 /// polynomial X^n + 1 using a fast Fourier transform.
                 ///
@@ -337,12 +351,11 @@ fn Falcon(N: u32) type {
                                     }
                                 },
                                 inline 16, 8, 4, 2, 1 => |distance| {
-                                    const vector = Fq.vector(distance);
-                                    const Fv = vector.Fv;
-                                    const u: Fv = @bitCast(a[j1..][0..distance].*);
-                                    const v: Fv = vector.mul(@bitCast(a[j1 + t ..][0..distance].*), @splat(s.data));
-                                    a[j1..][0..distance].* = @bitCast(vector.add(u, v));
-                                    a[j1 + t ..][0..distance].* = @bitCast(vector.sub(u, v));
+                                    const Fv = Fq.Vector(distance);
+                                    const u: Fv = .from(a[j1..][0..distance]);
+                                    const v = Fv.from(a[j1 + t ..][0..distance]).mul(.splat(s));
+                                    a[j1..][0..distance].* = u.add(v).to();
+                                    a[j1 + t ..][0..distance].* = u.sub(v).to();
                                 },
                                 else => unreachable,
                             }
@@ -380,12 +393,11 @@ fn Falcon(N: u32) type {
                                     }
                                 },
                                 inline 16, 8, 4, 2, 1 => |distance| {
-                                    const vector = Fq.vector(distance);
-                                    const Fv = vector.Fv;
-                                    const u: Fv = @bitCast(a[j1..][0..distance].*);
-                                    const v: Fv = @bitCast(a[j1 + t ..][0..distance].*);
-                                    a[j1..][0..distance].* = @bitCast(vector.add(u, v));
-                                    a[j1 + t ..][0..distance].* = @bitCast(vector.mul(vector.sub(u, v), @splat(s.data)));
+                                    const Fv = Fq.Vector(distance);
+                                    const u: Fv = .from(a[j1..][0..distance]);
+                                    const v: Fv = .from(a[j1 + t ..][0..distance]);
+                                    a[j1..][0..distance].* = u.add(v).to();
+                                    a[j1 + t ..][0..distance].* = (u.sub(v)).mul(.splat(s)).to();
                                 },
                                 else => unreachable,
                             }
@@ -421,6 +433,7 @@ fn Falcon(N: u32) type {
             // In order to avoid computing the square root, we use the squared norm and compare it to \beta^2.
             var norm: i64 = 0;
             for (s1.coeff, sig.s2.coeff) |i, j| {
+                // NOTE: LLVM vectorizes this quite well, no extra work needed.
                 const value: i64 = i.balanced();
                 norm += (value * value) + (@as(i64, j) * j);
             }
