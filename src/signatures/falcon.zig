@@ -218,7 +218,7 @@ fn Falcon(N: u32) type {
                     }
 
                     fn add(a: Self, b: Self) Self {
-                        const s = a.data +% b.data;
+                        const s = a.data + b.data;
                         const d, const n: Vl = @subWithOverflow(s, Ql);
                         return .{ .data = d +% (Ql * n) };
                     }
@@ -239,7 +239,7 @@ fn Falcon(N: u32) type {
             }
 
             fn add(a: Fq, b: Fq) Fq {
-                const s = a.data +% b.data;
+                const s = a.data + b.data;
                 const d, const n: u32 = @subWithOverflow(s, Q);
                 const r = d +% (Q * n);
                 return .{ .data = r };
@@ -341,13 +341,14 @@ fn Falcon(N: u32) type {
                             const j1 = 2 * i * t;
                             const j2 = j1 + t - 1;
                             const s = precompute.positive[m + i];
-                            switch ((j2 + 1) - j1) {
-                                inline 256, 128, 64, 32, 16, 8, 4, 2, 1 => |distance| {
-                                    const Fv = Fq.Vector(distance);
-                                    const u: Fv = .from(a[j1..][0..distance]);
-                                    const v = Fv.from(a[j1 + t ..][0..distance]).mul(.splat(s));
-                                    a[j1..][0..distance].* = u.add(v).to();
-                                    a[j1 + t ..][0..distance].* = u.sub(v).to();
+                            const distance = (j2 + 1) - j1;
+                            switch (distance) {
+                                inline 256, 128, 64, 32, 16, 8, 4, 2, 1 => |d| {
+                                    const Fv = Fq.Vector(d);
+                                    const u: Fv = .from(a[j1..][0..d]);
+                                    const v = Fv.from(a[j1 + t ..][0..d]).mul(.splat(s));
+                                    a[j1..][0..d].* = u.add(v).to();
+                                    a[j1 + t ..][0..d].* = u.sub(v).to();
                                 },
                                 else => unreachable,
                             }
@@ -375,13 +376,14 @@ fn Falcon(N: u32) type {
                             const j2 = j1 + t - 1;
                             // s = {\phi}_rev^-1[h + i]
                             const s = precompute.negative[h + i];
-                            switch ((j2 + 1) - j1) {
-                                inline 256, 128, 64, 32, 16, 8, 4, 2, 1 => |distance| {
-                                    const Fv = Fq.Vector(distance);
-                                    const u: Fv = .from(a[j1..][0..distance]);
-                                    const v: Fv = .from(a[j1 + t ..][0..distance]);
-                                    a[j1..][0..distance].* = u.add(v).to();
-                                    a[j1 + t ..][0..distance].* = (u.sub(v)).mul(.splat(s)).to();
+                            const distance = (j2 + 1) - j1;
+                            switch (distance) {
+                                inline 256, 128, 64, 32, 16, 8, 4, 2, 1 => |d| {
+                                    const Fv = Fq.Vector(d);
+                                    const u: Fv = .from(a[j1..][0..d]);
+                                    const v: Fv = .from(a[j1 + t ..][0..d]);
+                                    a[j1..][0..d].* = u.add(v).to();
+                                    a[j1 + t ..][0..d].* = (u.sub(v)).mul(.splat(s)).to();
                                 },
                                 else => unreachable,
                             }
@@ -483,12 +485,20 @@ fn Falcon(N: u32) type {
             state.update(r);
             state.update(msg);
 
+            // We can amortize the cost of the shake by sampling many bytes at once,
+            // allowing parallel Keccak, instead of just pulling 2 bytes per round.
+            var sample: [Shake256.block_length]u8 = undefined;
+            var offset: usize = sample.len;
+
             var i: u32 = 0;
             var coeffs: [N]Fq = undefined;
             while (i != N) {
-                var sample: [2]u8 = undefined;
-                state.squeeze(&sample);
-                const t = (@as(u32, sample[0]) << 8) | sample[1];
+                if (offset >= sample.len) {
+                    state.squeeze(&sample);
+                    offset = 0;
+                }
+                const t = (@as(u32, sample[offset]) << 8) | sample[offset + 1];
+                offset += 2;
                 if (t < K * Q) {
                     coeffs[i] = .init(@intCast(t % Q));
                     i += 1;
