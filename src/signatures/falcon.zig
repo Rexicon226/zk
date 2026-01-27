@@ -1,5 +1,5 @@
 const std = @import("std");
-const sampler = @import("falcon/samplerz.zig");
+const builtin = @import("builtin");
 
 const Shake256 = std.crypto.hash.sha3.Shake256;
 
@@ -11,8 +11,6 @@ fn Falcon(N: u32) type {
 
         /// The integer modulus used in Falcon.
         const Q = 12 * 1024 + 1;
-        const V = @Vector(4, i16);
-        const QV: V = @splat(Q);
 
         comptime {
             switch (N) {
@@ -97,6 +95,9 @@ fn Falcon(N: u32) type {
         pub const PublicKey = struct {
             h: Polynomial(N, Fq),
 
+            const V = @Vector(4, i16);
+            const QV: V = @splat(Q);
+
             const BITS_PER_VALUE = 14;
             const SIZE = 1 + (14 * N / 8);
 
@@ -137,7 +138,7 @@ fn Falcon(N: u32) type {
                     // We perform the modulus check in parallel, checking each element and returning
                     // an error if any of the elements are greater than greater than or equal to the modulus.
                     if (@reduce(.Or, masked >= QV)) return error.InvalidCoeff;
-                    out.* = Fq.initVector(masked);
+                    out.* = Fq.Vector(4).init(masked);
                 }
 
                 return .{ .h = .{ .coeff = coeff } };
@@ -186,19 +187,13 @@ fn Falcon(N: u32) type {
         pub const Fq = struct {
             data: u32,
 
+            const V = @Vector(4, i16);
+            const QV: V = @splat(Q);
+
             pub fn init(value: i16) Fq {
                 const sign: i16 = if (value < 0) -1 else 1;
                 const reduced = sign * @mod(sign * value, Q);
                 return .{ .data = @intCast(reduced + Q * @as(i16, @intFromBool(value < 0))) };
-            }
-
-            /// Given @Vector(4, i16), returns [ init(v0), init(v1), init(v2), init(v3) ].
-            fn initVector(value: V) @Vector(4, u32) {
-                const one: V = @splat(1);
-                const predicate = value < (one - one);
-                const sign = @select(i16, predicate, -one, one);
-                const reduced = sign * @mod(sign * value, QV);
-                return @intCast(reduced + QV * @intFromBool(predicate));
             }
 
             fn Vector(L: u32) type {
@@ -207,8 +202,20 @@ fn Falcon(N: u32) type {
 
                     const Self = @This();
                     const Vl = @Vector(L, u32);
+                    const Sl = @Vector(L, i16);
+
                     const Ql: Vl = @splat(Q);
+                    const Qs: Sl = @splat(Q);
                     const zero: Vl = @splat(0);
+
+                    /// Given @Vector(4, i16), returns [ init(v0), init(v1), init(v2), init(v3) ].
+                    fn init(value: Sl) @Vector(L, u32) {
+                        const one: Sl = @splat(1);
+                        const predicate = value < (one - one);
+                        const sign = @select(i16, predicate, -one, one);
+                        const reduced = sign * @mod(sign * value, Qs);
+                        return @intCast(reduced + Qs * @intFromBool(predicate));
+                    }
 
                     fn from(fqs: *const [L]Fq) Self {
                         return .{ .data = @bitCast(fqs.*) };
@@ -477,9 +484,18 @@ fn Falcon(N: u32) type {
         /// This is only a consideration that needs to be made while signing a
         /// sensitive message. The downside of this approach is that it
         /// introduces a significant cost to verification performance.
-        fn hashToPoint(msg: []const u8, r: *const [40]u8) Polynomial(N, Fq) {
+        pub fn hashToPoint(msg: []const u8, r: *const [40]u8) Polynomial(N, Fq) {
             // K <- ⌊2^16 / Q⌋
             const K = (1 << 16) / Q;
+            const S = struct {
+                const lanes = 16;
+
+                const Mask = std.meta.Int(.unsigned, lanes);
+                const V = @Vector(lanes, u32);
+
+                extern fn @"llvm.x86.avx512.mask.compress.d.512"(V, V, Mask) V;
+                const compress = @"llvm.x86.avx512.mask.compress.d.512";
+            };
 
             var state: Shake256 = .init(.{});
             state.update(r);
@@ -487,25 +503,49 @@ fn Falcon(N: u32) type {
 
             // We can amortize the cost of the shake by sampling many bytes at once,
             // allowing parallel Keccak, instead of just pulling 2 bytes per round.
-            var sample: [Shake256.block_length]u8 = undefined;
+            var sample: [128]u8 = undefined;
             var offset: usize = sample.len;
 
+            // Worst case is that we're at N - 1 elements filled, and we will
+            // then keep resampling S.lanes elements until mask > 0.
+            var coeffs: [N + S.lanes]Fq = undefined;
             var i: u32 = 0;
-            var coeffs: [N]Fq = undefined;
-            while (i != N) {
+            while (i < N) {
                 if (offset >= sample.len) {
                     state.squeeze(&sample);
                     offset = 0;
                 }
-                const t = (@as(u32, sample[offset]) << 8) | sample[offset + 1];
-                offset += 2;
-                if (t < K * Q) {
-                    coeffs[i] = .init(@intCast(t % Q));
-                    i += 1;
+
+                if (comptime builtin.zig_backend == .stage2_llvm and
+                    builtin.cpu.arch == .x86_64 and
+                    // It only makes sense to use the vpcompress strategy on targets like Zen 5
+                    // where the performance of vpcompressd isn't hundreds of cycles (like it is on Zen 4).
+                    builtin.cpu.model == &std.Target.x86.cpu.znver5)
+                {
+                    const Kv: S.V = @splat(K * Q);
+                    const Fv = Fq.Vector(S.lanes);
+
+                    var batch: S.V = undefined;
+                    inline for (0..S.lanes) |j| {
+                        const idx = offset + j * 2;
+                        batch[j] = (@as(u32, sample[idx]) << 8) | sample[idx + 1];
+                    }
+                    offset += S.lanes * 2;
+                    const mask: u16 = @bitCast(batch < Kv);
+                    const compressed = S.compress(batch, @splat(0), mask);
+                    coeffs[i..][0..S.lanes].* = @bitCast(Fv.init(@intCast(compressed % Fv.Ql)));
+                    i += @popCount(mask);
+                } else {
+                    const t = (@as(u32, sample[offset]) << 8) | sample[offset + 1];
+                    offset += 2;
+                    if (t < K * Q) {
+                        coeffs[i] = .init(@intCast(t % Q));
+                        i += 1;
+                    }
                 }
             }
 
-            return .{ .coeff = coeffs };
+            return .{ .coeff = @bitCast(coeffs[0..N].*) };
         }
     };
 }
