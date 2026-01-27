@@ -531,7 +531,7 @@ fn Falcon(N: u32) type {
                         batch[j] = (@as(u32, sample[idx]) << 8) | sample[idx + 1];
                     }
                     offset += S.lanes * 2;
-                    const mask: u16 = @bitCast(batch < Kv);
+                    const mask: S.Mask = @bitCast(batch < Kv);
                     const compressed = S.compress(batch, @splat(0), mask);
                     coeffs[i..][0..S.lanes].* = @bitCast(Fv.init(@intCast(compressed % Fv.Ql)));
                     i += @popCount(mask);
