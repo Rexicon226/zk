@@ -2,6 +2,63 @@ const std = @import("std");
 const falcon = @import("../falcon.zig");
 
 const Falcon512 = falcon.Falcon512;
+const Pubkey = Falcon512.PublicKey;
+const Signature = Falcon512.Signature;
+
+const MESSAGE = "test message for pre-computed verification";
+const PUBKEY_BASE64 = "CV6ZIYJ17ttDNY6BY2L8laqhQqEQT0hhvZsBqe1NNeUj+c7ULeEiVl3FZwC0xqYFDh9uAJxQyM1eGQ3MeH9TzRTuCQiF0W21vlwR0R/Rt3ClEYJaopd4q5fnosNXxfOmS4pgBxLB2wgT7KLct2MOp+s1RClmOynIr54jA5YIrE0w/juE1Xmp3Yc3igsaJumDqBCUthmKQLaVa6+wKNNnAFtaNbHbuGhIQaC9edrcknM4dBlJzWp8YDIqxOHs3aou3+ljgHZjmGW3VYcgcf2TK8SRtVmQVHiCkQa2woZ204kRkXUIOuMRUmb8B+K53kALVjDJ2ZvTuKIukFqO0idUMmFzyO+K0vDBlMysF9yDGZ/Um1US+Hk6hyqpyFyz4J+hYhaD0vtK7Qf0UGsVU3GEcOLB9MWUCuxEkmQttxU4SbEFVtWy1M/BvU2AoPl0N8KlQbm5+IvrEA86UFfHHykhGBUYIpPdxiOmlvM5hlce6Q3UgB+dCuy61uUYD3yI3+Z/RSEaBWBQ92MCt9ImtyCVjiRNWaM53hlTSF+7t0AlVay5G/Lf0UOyEScNSaVe4GJTv9vxnxyaFL9c+4k03abAVFC9prS5lCDLGpnUqvGQGUemP9hG7eY3PWOqgB+DEHhVmkIU4ybJAHbPFL0BxubCO2MxW+mf+pyi2CQK7ypAH30ZtpQ3/Z2La45d6voM2n9s9hddXm1wjXnh5EXWv7mCKoXK2IExRbshnnAp+pJ5jEVYsFKB6IqRo4i+YRKuyU4EEXDVZSB9URRpkm6pMTlULvPmYMojEMAkVRt4Y7ZoyQNQIT5gs2hGUZ2+8jwT2KW7t7k1MhjeWC5uRmdrgyYGNfN609MlkQi7IIDgrwpF+8WrzemR5vcmySSVo3Hk9WjjrrnI3UjvLKSylRrJdgG9WMD3NE8RCjGRwWQoXzK4kPuBs1NnvX2ywDxhhYFwpKOQ338UcTg4lhhNpzzGmOGP3LXuxrCK5AGf+erwsJETJhWu5TcihpzmY/bgw76Vei9S7WVWqx0opviNhQbmzboQwQRxBX2Wewgmvz2I86pKfXgyJfQ7gOae0MrrGmDnkQ3W9ENhwrJ1G7fmofMrnnzFOVqbZJq9Wz2fnYmSY2c0URS9FmxUC5fGI5Kx01cZnyh6AxSGBnxATi/FR1lhKvx+NdsCM2pEIHC5ypFIiazAqIEC";
+const SIGNATURE_BASE64 = "OSCJBLuOJh5ASZPOMj7hL6Wvqs4nmwXV+xEGkRUkLiXgHaXqBjaayVwEYSQ6SDYKA5oi1aWzmx5uULs0Xw/l7+VsG58jhGL5NfkO0PPK9dH/R6HBhGamGPOqTW9Ye/0PeWUydbcRQ8XKWEV7IazO0+pmahhul7gSWcvZnJVbVf14e/UITCvmsXWnr1wQk0tMscaDPGwLvsr1MevbAzxUZlZ3SZ80D9YEyI1dQ5O6NrnpZlifJfgszEHXuRjtV6iCmNLBojckK0GCe/55ddEHKz/uLREPyXav5qM5jczwdjMq43qp50UshSHJzLtCY9LWfNpvp882VkCrXLEC/oQ0elIO2bXbhSYX+sev1t0qS0pNMtkmCFi/sHpNIUqr8Cazw7+MiZzUsTxHTRRjIKjhsdrEh6Oe0vi96h2d86iyGxo5TGZtNYg729HQnPRCFCEy1OHTPl6NL3s8VbyX7Ak/hqg2SDzy7pDofHSz9YNd4ftr5x9Cia+K3rVJZxm3M16c2NvNusblH5xpvGHUVKnJUZNlArhU3r3kW2eQZzqOoj5jOFC65kNxJm2yZUoA05Fq//oCT+sw1TDLrtJjKupDIIbhs4o1iIQCDMKVmFs1OiG5g/Kf5zMQE4f4huuiSn4dTsk9PArlGpvpnOLRiY+DUSRgHeKB7twZORI+qBoI2SnTwPhT+DE6WyM3VC13+i3VBVbNv9HNe3/rnBEa6ZtzZMtPnmQs2eZ26L83mcDONoxwvm/rsfKxNEoO7ivdBG3l52URskV5lbgbLNnfldnfn7eFkiCHikUl1m3INgiTiB83KnRauvYW4FWaDhs2xvX8qL7upp3mFnuH6cnGenXVFjFVcG5t0vm6YW/ObDyIkA==";
+
+fn getPubkey() Pubkey {
+    var buffer: [897]u8 = undefined;
+    std.base64.standard.Decoder.decode(&buffer, PUBKEY_BASE64) catch unreachable;
+    return Pubkey.fromBytes(&buffer) catch unreachable;
+}
+
+fn getSignature() Signature {
+    var buffer: [655]u8 = undefined;
+    std.base64.standard.Decoder.decode(&buffer, SIGNATURE_BASE64) catch unreachable;
+    return Signature.fromBytes(&buffer) catch unreachable;
+}
+
+test "verification succeeds" {
+    const pubkey = getPubkey();
+    const sig = getSignature();
+    try Falcon512.verify(MESSAGE, sig, pubkey);
+}
+
+test "wrong message fails" {
+    const pubkey = getPubkey();
+    const sig = getSignature();
+    try std.testing.expectError(
+        error.InvalidBound,
+        Falcon512.verify("wrong message", sig, pubkey),
+    );
+}
+
+test "wrong signature fails" {
+    const pubkey = getPubkey();
+    var sig = getSignature();
+
+    sig.s2.coeff[59] ^= 0xFF;
+
+    try std.testing.expectError(
+        error.InvalidBound,
+        Falcon512.verify(MESSAGE, sig, pubkey),
+    );
+}
+
+test "wrong pubkey fails" {
+    var pubkey = getPubkey();
+    const sig = getSignature();
+
+    pubkey.h.coeff[59].data ^= 0xFF;
+
+    try std.testing.expectError(
+        error.InvalidBound,
+        Falcon512.verify(MESSAGE, sig, pubkey),
+    );
+}
 
 test "512 test vector" {
     { // success case
