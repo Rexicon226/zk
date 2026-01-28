@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const sampler = @import("falcon/samplerz.zig");
 
 const Shake256 = std.crypto.hash.sha3.Shake256;
 
@@ -21,76 +22,6 @@ fn Falcon(N: u32) type {
             // Show that Q is NTT-friendly
             std.debug.assert(Q % (2 * N) == 1);
         }
-
-        const precompute = struct {
-            const T = u64;
-
-            // Takes 18ms to compute powers at comptime, in Zig 0.15.
-            const positive = precompute.powers(psi);
-            const negative = precompute.powers(inv(psi));
-
-            /// A primative 2N-th root of unity in $\mathbb{Z}_q$.
-            const psi = psi: {
-                const exp = (Q - 1) / (2 * N);
-                for (1..Q) |i| {
-                    const g = powmod(i, exp);
-                    const g2 = powmod(g, N);
-                    if (g2 != 1) break :psi g;
-                }
-                @compileError("no primative 2N-th root of unity!");
-            };
-
-            fn reverse(x: T) T {
-                return @bitReverse(x) >> (@as(u7, 64) - logn);
-            }
-
-            /// Returns the bitreversed powers of `x`, from 0 to N - 1.
-            fn powers(x: T) [N]Fq {
-                @setEvalBranchQuota(10_000);
-                var pows: [N]T = @splat(1);
-                var fqs: [N]Fq = @splat(.init(1));
-                for (1..N) |i| {
-                    const pow = (pows[i - 1] * x) % Q;
-                    pows[i] = pow;
-                    fqs[reverse(i)] = .init(pow);
-                }
-                return fqs;
-            }
-
-            /// Returns x^k mod Q
-            fn powmod(a: T, b: T) T {
-                var res = 1;
-                var x = a;
-                var k = b;
-                while (k > 0) {
-                    if (k % 2 == 1) res = (res * x) % Q;
-                    x = (x * x) % Q;
-                    k /= 2;
-                }
-                return res;
-            }
-
-            /// Returns x^-1 mod Q
-            fn inv(x: T) T {
-                var t: i64 = 0;
-                var new_t: i64 = 1;
-                var r: i64 = Q;
-                var new_r: i64 = x;
-
-                while (new_r != 0) {
-                    const quo = r / new_r;
-                    const a = t - (quo * new_t);
-                    const b = r - (quo * new_r);
-                    t = new_t;
-                    r = new_r;
-                    new_t = a;
-                    new_r = b;
-                }
-                if (r > 1) @compileError("could not find inverse");
-                if (t < 0) t += Q;
-                return t;
-            }
-        };
 
         pub const PublicKey = struct {
             h: Polynomial(N, Fq),
@@ -184,17 +115,82 @@ fn Falcon(N: u32) type {
             }
         };
 
-        pub const Fq = struct {
+        const Fq = struct {
             data: u32,
 
             const V = @Vector(4, i16);
             const QV: V = @splat(Q);
 
-            pub fn init(value: i16) Fq {
-                const sign: i16 = if (value < 0) -1 else 1;
-                const reduced = sign * @mod(sign * value, Q);
-                return .{ .data = @intCast(reduced + Q * @as(i16, @intFromBool(value < 0))) };
-            }
+            const precompute = struct {
+                const T = u64;
+
+                // Takes 18ms to compute powers at comptime, in Zig 0.15.
+                const positive = precompute.powers(psi);
+                const negative = precompute.powers(inv(psi));
+                const ninv: Fq = .init(inv(N));
+
+                /// A primative 2N-th root of unity in $\mathbb{Z}_q$.
+                const psi = psi: {
+                    const exp = (Q - 1) / (2 * N);
+                    for (1..Q) |i| {
+                        const g = powmod(i, exp);
+                        const g2 = powmod(g, N);
+                        if (g2 != 1) break :psi g;
+                    }
+                    @compileError("no primative 2N-th root of unity!");
+                };
+
+                fn reverse(x: T) T {
+                    return @bitReverse(x) >> (@as(u7, 64) - logn);
+                }
+
+                /// Returns the bitreversed powers of `x`, from 0 to N - 1.
+                fn powers(x: T) [N]Fq {
+                    @setEvalBranchQuota(10_000);
+                    var pows: [N]T = @splat(1);
+                    var fqs: [N]Fq = @splat(.init(1));
+                    for (1..N) |i| {
+                        const pow = (pows[i - 1] * x) % Q;
+                        pows[i] = pow;
+                        fqs[reverse(i)] = .init(pow);
+                    }
+                    return fqs;
+                }
+
+                /// Returns x^k mod Q
+                fn powmod(a: T, b: T) T {
+                    var res = 1;
+                    var x = a;
+                    var k = b;
+                    while (k > 0) {
+                        if (k % 2 == 1) res = (res * x) % Q;
+                        x = (x * x) % Q;
+                        k /= 2;
+                    }
+                    return res;
+                }
+
+                /// Returns x^-1 mod Q
+                fn inv(x: T) T {
+                    var t: i64 = 0;
+                    var new_t: i64 = 1;
+                    var r: i64 = Q;
+                    var new_r: i64 = x;
+
+                    while (new_r != 0) {
+                        const quo = r / new_r;
+                        const a = t - (quo * new_t);
+                        const b = r - (quo * new_r);
+                        t = new_t;
+                        r = new_r;
+                        new_t = a;
+                        new_r = b;
+                    }
+                    if (r > 1) @compileError("could not find inverse");
+                    if (t < 0) t += Q;
+                    return t;
+                }
+            };
 
             fn Vector(L: u32) type {
                 return struct {
@@ -245,6 +241,12 @@ fn Falcon(N: u32) type {
                 };
             }
 
+            pub fn init(value: i16) Fq {
+                const sign: i16 = if (value < 0) -1 else 1;
+                const reduced = sign * @mod(sign * value, Q);
+                return .{ .data = @intCast(reduced + Q * @as(i16, @intFromBool(value < 0))) };
+            }
+
             fn add(a: Fq, b: Fq) Fq {
                 const s = a.data + b.data;
                 const d, const n: u32 = @subWithOverflow(s, Q);
@@ -269,6 +271,75 @@ fn Falcon(N: u32) type {
             }
         };
 
+        const Complex = struct {
+            re: f64,
+            im: f64,
+
+            const precompute = struct {
+                const positive = powers(psi);
+                const ninv = Complex.init(1.0 / @as(f64, N), 0.0);
+
+                /// $\psi = e^{i\pi/N}$ (primitive 2N-th root of unity)
+                const psi: Complex = psi: {
+                    const theta = std.math.pi / @as(f64, N);
+                    break :psi .init(@cos(theta), @sin(theta));
+                };
+
+                fn reverse(x: u64) u64 {
+                    return @bitReverse(x) >> (64 - logn);
+                }
+
+                fn powers(x: Complex) [N]Complex {
+                    @setEvalBranchQuota(10_000);
+                    var out: [N]Complex = undefined;
+                    var cur = Complex.init(1.0, 0.0);
+                    out[reverse(0)] = cur;
+                    for (1..N) |i| {
+                        cur = Complex.mul(cur, x);
+                        out[reverse(i)] = cur;
+                    }
+                    return out;
+                }
+            };
+
+            fn init(re: f64, im: f64) Complex {
+                return .{ .re = re, .im = im };
+            }
+
+            /// (a + ib) + (c + id) == (a + c) + i (b + d)
+            fn add(a: Complex, b: Complex) Complex {
+                return .{ .re = a.re + b.re, .im = a.im + b.im };
+            }
+            /// (a + ib) - (c + id) == (a - c) + i (b - d)
+            fn sub(a: Complex, b: Complex) Complex {
+                return .{ .re = a.re - b.re, .im = a.im - b.im };
+            }
+            /// (a + ib) * (c + id) == (a*c - b*d) + i (a*d + b*c)
+            fn mul(a: Complex, b: Complex) Complex {
+                const re = a.re * b.re - a.im * b.im;
+                const im = a.re * b.im + a.im * b.re;
+                return .{ .re = re, .im = im };
+            }
+            /// (a + ib) / (c + id) == [(a + ib) * (c - id)] / (c*c + d*d)
+            fn div(a: Complex, b: Complex) Complex {
+                const norm_sqr = b.normSquare();
+                const re = a.re * b.re + a.im * b.im;
+                const im = a.im * b.re - a.re * b.im;
+                return .{ .re = re / norm_sqr, .im = im / norm_sqr };
+            }
+            fn mulScalar(a: Complex, b: f64) Complex {
+                return .{ .re = a.re * b, .im = a.im * b };
+            }
+            /// Returns the square of the norm. (re^2 + im^2).
+            fn normSquare(c: Complex) f64 {
+                return c.re * c.re + c.im * c.im;
+            }
+
+            fn conj(c: Complex) Complex {
+                return .{ .re = c.re, .im = -c.im };
+            }
+        };
+
         fn Polynomial(length: comptime_int, T: type) type {
             return struct {
                 coeff: [length]T,
@@ -277,32 +348,6 @@ fn Falcon(N: u32) type {
                 comptime {
                     std.debug.assert(length < 4096);
                 }
-
-                /// Generate a polynomial of degree at most (N - 1), with coefficients
-                /// following a discrete Gaussian distribution $D_{Z, 0, sigma}$ with
-                /// sigma = 1.17 * sqrt(Q / (2 * N)).
-                // pub fn generate() Self {
-                //     comptime std.debug.assert(T == i16);
-
-                //     const rng = std.crypto.random;
-                //     const mu = 0.0;
-                //     const sigma_star = 1.17 * @sqrt(12289.0 / 8192.0);
-                //     var f0: [4096]i16 = undefined;
-                //     for (&f0) |*o| o.* = sampler.samplerz(
-                //         mu,
-                //         sigma_star,
-                //         sigma_star - 0.001,
-                //         rng,
-                //     );
-                //     var f: [length]i16 = @splat(0);
-                //     const k = 4096 / length;
-                //     for (0..length) |i| {
-                //         var sum: i16 = 0;
-                //         for (0..k) |j| sum += f0[i * k + j];
-                //         f[i] = sum;
-                //     }
-                //     return .{ .coeff = f };
-                // }
 
                 fn toField(a: Self) Polynomial(length, Fq) {
                     comptime std.debug.assert(T == i16);
@@ -324,6 +369,8 @@ fn Falcon(N: u32) type {
                     for (&out) |*o| o.* = o.neg();
                     return .{ .coeff = out };
                 }
+
+                /// NOTE: Performs Hadamard multiplication, not a convolutional.
                 fn mul(a: Self, b: Self) Self {
                     var out: [length]T = undefined;
                     for (&out, a.coeff, b.coeff) |*o, x, y| {
@@ -347,15 +394,24 @@ fn Falcon(N: u32) type {
                         for (0..m) |i| {
                             const j1 = 2 * i * t;
                             const j2 = j1 + t - 1;
-                            const s = precompute.positive[m + i];
+                            const s = T.precompute.positive[m + i];
                             const distance = (j2 + 1) - j1;
                             switch (distance) {
-                                inline 256, 128, 64, 32, 16, 8, 4, 2, 1 => |d| {
-                                    const Fv = Fq.Vector(d);
-                                    const u: Fv = .from(a[j1..][0..d]);
-                                    const v = Fv.from(a[j1 + t ..][0..d]).mul(.splat(s));
-                                    a[j1..][0..d].* = u.add(v).to();
-                                    a[j1 + t ..][0..d].* = u.sub(v).to();
+                                inline 256, 128, 64, 32, 16, 8, 4, 2, 1 => |d| switch (T) {
+                                    Fq => {
+                                        const Fv = Fq.Vector(d);
+                                        const u: Fv = .from(a[j1..][0..d]);
+                                        const v = Fv.from(a[j1 + t ..][0..d]).mul(.splat(s));
+                                        a[j1..][0..d].* = u.add(v).to();
+                                        a[j1 + t ..][0..d].* = u.sub(v).to();
+                                    },
+                                    Complex => for (0..distance) |b| {
+                                        const u = a[j1 + b];
+                                        const v = a[j1 + b + t].mul(s);
+                                        a[j1 + b] = u.add(v);
+                                        a[j1 + b + t] = u.sub(v);
+                                    },
+                                    else => unreachable,
                                 },
                                 else => unreachable,
                             }
@@ -382,7 +438,7 @@ fn Falcon(N: u32) type {
                         for (0..h) |i| {
                             const j2 = j1 + t - 1;
                             // s = {\phi}_rev^-1[h + i]
-                            const s = precompute.negative[h + i];
+                            const s = T.precompute.negative[h + i];
                             const distance = (j2 + 1) - j1;
                             switch (distance) {
                                 inline 256, 128, 64, 32, 16, 8, 4, 2, 1 => |d| {
@@ -402,12 +458,29 @@ fn Falcon(N: u32) type {
                     }
 
                     // a[j] = a[j] * n^-1 mod q
-                    const ninv: Fq = comptime .init(precompute.inv(N));
+                    const ninv = T.precompute.ninv;
                     for (&a) |*aj| {
                         aj.* = aj.mul(ninv);
                     }
 
                     return .{ .coeff = a };
+                }
+
+                fn l2NormSquared(p: Self) f64 {
+                    var sum: f64 = 0.0;
+                    for (p.coeff) |coeff| {
+                        const value: f64 = @floatFromInt(coeff);
+                        sum += (value * value);
+                    }
+                    return sum;
+                }
+
+                fn inverse(p: Self) Self {
+                    var new: Self = undefined;
+                    for (&new.coeff, p.coeff) |*a, b| {
+                        a.* = Complex.init(1.0, 0.0).div(b);
+                    }
+                    return new;
                 }
             };
         }
@@ -546,10 +619,117 @@ fn Falcon(N: u32) type {
 
             return .{ .coeff = @bitCast(coeffs[0..N].*) };
         }
+
+        const NtruGen = struct {
+            f: Polynomial(N, i16),
+            g: Polynomial(N, i16),
+            F: Polynomial(N, i16),
+            G: Polynomial(N, i16),
+        };
+
+        /// Samples 4 polynomials f, g, F, G such that  f * G - g * F = q mod (X^n + 1).
+        ///
+        /// Algorithm 5 from https://falcon-sign.info/falcon.pdf.
+        fn ntruGen() NtruGen {
+            loop: while (true) {
+                const f = generate();
+                const g = generate();
+
+                // Ensure f is invertable mod q
+                const f_ntt = f.toField().fft();
+                for (f_ntt.coeff) |coeff| if (coeff.data == 0) continue :loop;
+
+                const gamma = granSchmidtNormSquared(&f, &g);
+                _ = gamma;
+            }
+        }
+
+        /// Compute the Gram-Schmidt norm of B = [[g, -f], [G, -F]] from f and g.
+        fn granSchmidtNormSquared(f: *const Polynomial(N, i16), g: *const Polynomial(N, i16)) f64 {
+            const C = Polynomial(N, Complex);
+
+            // ||(g, -f)||
+            const norm_f_squared = f.l2NormSquared();
+            const norm_g_squared = g.l2NormSquared();
+            const gamma1 = norm_f_squared + norm_g_squared;
+
+            // ||(qf* / (ff* + gg*), qg* / (ff* + gg*))||
+            var f_fft: C = undefined;
+            var g_fft: C = undefined;
+            for (f.coeff, g.coeff, 0..) |a, b, i| {
+                f_fft.coeff[i] = .init(@floatFromInt(a), 0.0);
+                g_fft.coeff[i] = .init(@floatFromInt(b), 0.0);
+            }
+            f_fft = f_fft.fft();
+            g_fft = g_fft.fft();
+
+            var f_adj: C = undefined;
+            var g_adj: C = undefined;
+            for (f_fft.coeff, g_fft.coeff, 0..) |a, b, i| {
+                f_adj.coeff[i] = a.conj();
+                g_adj.coeff[i] = b.conj();
+            }
+
+            const ffgg = f_fft.mul(f_adj).add(g_fft.mul(g_adj));
+            const ffgg_inverse = ffgg.inverse();
+
+            var qf_over_ffgg: C = undefined;
+            var qg_over_ffgg: C = undefined;
+            for (&qf_over_ffgg.coeff, &qg_over_ffgg.coeff, 0..) |*a, *b, i| {
+                a.* = f_adj.coeff[i].mulScalar(Q);
+                b.* = g_adj.coeff[i].mulScalar(Q);
+            }
+
+            var norm_f_over_ffgg_squared: f64 = 0.0;
+            var norm_g_over_ffgg_squared: f64 = 0.0;
+            for (qf_over_ffgg.mul(ffgg_inverse).coeff, qg_over_ffgg.mul(ffgg_inverse).coeff) |a, b| {
+                norm_f_over_ffgg_squared += a.mul(a.conj()).re;
+                norm_g_over_ffgg_squared += b.mul(b.conj()).re;
+            }
+            const gamma2 = (norm_f_over_ffgg_squared / N) + (norm_g_over_ffgg_squared / N);
+
+            return @max(gamma1, gamma2);
+        }
+
+        /// Generate a polynomial of degree at most (N - 1), with coefficients
+        /// following a discrete Gaussian distribution $D_{Z, 0, sigma}$ with
+        /// sigma = 1.17 * sqrt(Q / (2 * N)).
+        fn generate() Polynomial(N, i16) {
+            const rng = std.crypto.random;
+            const mu = 0.0;
+            const sigma_star = 1.17 * @sqrt(12289.0 / 8192.0);
+            var f0: [4096]i16 = undefined;
+            for (&f0) |*o| o.* = sampler.samplerz(
+                mu,
+                sigma_star,
+                sigma_star - 0.001,
+                rng,
+            );
+            var f: [N]i16 = @splat(0);
+            const k = 4096 / N;
+            for (0..N) |i| {
+                var sum: i16 = 0;
+                for (0..k) |j| sum += f0[i * k + j];
+                f[i] = sum;
+            }
+            return .{ .coeff = f };
+        }
     };
 }
 
 test {
     _ = @import("falcon/test.zig");
     _ = @import("falcon/samplerz.zig");
+}
+
+test "gs norm" {
+    const P = Falcon512.Polynomial(512, i16);
+    var f: P = undefined;
+    var g: P = undefined;
+    for (0..512) |i| {
+        f.coeff[i] = @intCast(i % 5);
+        g.coeff[i] = @as(i16, @intCast(i % 7)) - 4;
+    }
+    const norm_squared = Falcon512.granSchmidtNormSquared(&f, &g);
+    try std.testing.expectApproxEqRel(5992556.183229722, norm_squared, 0.00001);
 }
