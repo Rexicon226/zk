@@ -5,6 +5,7 @@ const sampler = @import("falcon/samplerz.zig");
 const Shake256 = std.crypto.hash.sha3.Shake256;
 
 pub const Falcon512 = Falcon(512);
+pub const Falcon1024 = Falcon(1024);
 
 fn Falcon(N: u32) type {
     return struct {
@@ -44,7 +45,7 @@ fn Falcon(N: u32) type {
                 // values are compressed into a bit sequence of 14 * N bits, or 14N/8 bytes.
                 const h = bytes[1..];
                 var coeff: [N]Fq = undefined;
-                inline for (0..512 / 4) |i| {
+                inline for (0..N / 4) |i| {
                     // Given that each element is 14 bits, 7 bytes hold 4 elements (56 / 14 = 4).
                     // We represent the elements as u32 for efficient arithmetics.
                     const in = h[i * 7 ..][0..7];
@@ -91,9 +92,15 @@ fn Falcon(N: u32) type {
                 zero: u1 = 0,
             };
 
+            const SIZE = switch (N) {
+                512 => 666,
+                1024 => 1280,
+                else => unreachable,
+            };
+
             /// NOTE: As signatures use compress/decompress, their length is variable.
             pub fn fromBytes(bytes: []const u8) !Signature {
-                if (bytes.len > 666) return error.TooManyBytes;
+                if (bytes.len > SIZE) return error.TooManyBytes;
                 // We need at least 41 bytes to read the header/salt.
                 if (bytes.len < 41) return error.TooLittleBytes;
 
@@ -275,11 +282,40 @@ fn Falcon(N: u32) type {
             re: f64,
             im: f64,
 
+            /// Precomputes the powers of $\psi$ in the complex space.
+            ///
+            /// A nice property of computing primative roots in $\mathbb{C}$
+            /// is that instead of needing to search for it, like we did in the
+            /// finite field version, we get it for free in:
+            /// $\psi = e^{\frac{i\pi}{N}}$
+            ///
+            /// We find the powers of $\psi$ with Euler's Formula:
+            /// $$\psi^k = cos(\frac{\pi k}{N}) + i sin(\frac{\pi k}{N})$$
+            ///
+            /// Remember that the n-th root of unity is a complex number $\omega$
+            /// such that:
+            /// $\omega^n = 1$
+            ///
+            /// All such roots are:
+            /// $$\omega_k = e^{\frac{2\pi i k}{n}}, k = 0,1,\ldots,n - 1$$
+            ///
+            /// A primative n-th root is one whose powers generate all n roots.
+            /// We usually pick:
+            /// $\omega = e^{\frac{2\pi i}{N}}$
+            ///
+            /// When we perform negacyclic FFT (like NTRU does), instead of
+            /// evaluating at n-th roots of unity, we use 2N-th roots, and so we get:
+            /// $\psi = e^{\frac{i\pi}{N}}$
+            ///
+            /// Then because:
+            /// $\psi^N = e^{i \pi} = -1$
+            /// our transformations are modulo $x^N + 1$, and we evalate polynomials at:
+            /// $\psi^{2k + 1}, k = 0,\ldots, N - 1$
             const precompute = struct {
                 const positive = powers(psi);
                 const ninv = Complex.init(1.0 / @as(f64, N), 0.0);
 
-                /// $\psi = e^{i\pi/N}$ (primitive 2N-th root of unity)
+                /// $\psi = e^{\frac{i\pi}{N}}$ (primitive 2N-th root of unity)
                 const psi: Complex = psi: {
                     const theta = std.math.pi / @as(f64, N);
                     break :psi .init(@cos(theta), @sin(theta));
@@ -301,6 +337,49 @@ fn Falcon(N: u32) type {
                     return out;
                 }
             };
+
+            fn Vector(L: u32) type {
+                return struct {
+                    re: V,
+                    im: V,
+
+                    const V = @Vector(L, f64);
+                    const Self = @This();
+
+                    fn from(c: *const [L]Complex) Self {
+                        var re: V = undefined;
+                        var im: V = undefined;
+                        inline for (0..L) |i| {
+                            re[i] = c[i].re;
+                            im[i] = c[i].im;
+                        }
+                        return .{ .re = re, .im = im };
+                    }
+                    fn to(a: Self) [L]Complex {
+                        var out: [L]Complex = undefined;
+                        inline for (0..L) |i| {
+                            out[i] = .{ .re = a.re[i], .im = a.im[i] };
+                        }
+                        return out;
+                    }
+
+                    fn add(a: Self, b: Self) Self {
+                        return .{ .re = a.re + b.re, .im = a.im + b.im };
+                    }
+                    fn sub(a: Self, b: Self) Self {
+                        return .{ .re = a.re - b.re, .im = a.im - b.im };
+                    }
+                    fn mul(a: Self, b: Self) Self {
+                        const re = a.re * b.re - a.im * b.im;
+                        const im = a.re * b.im + a.im * b.re;
+                        return .{ .re = re, .im = im };
+                    }
+
+                    fn splat(c: Complex) Self {
+                        return .{ .re = @splat(c.re), .im = @splat(c.im) };
+                    }
+                };
+            }
 
             fn init(re: f64, im: f64) Complex {
                 return .{ .re = re, .im = im };
@@ -397,21 +476,15 @@ fn Falcon(N: u32) type {
                             const s = T.precompute.positive[m + i];
                             const distance = (j2 + 1) - j1;
                             switch (distance) {
-                                inline 256, 128, 64, 32, 16, 8, 4, 2, 1 => |d| switch (T) {
-                                    Fq => {
-                                        const Fv = Fq.Vector(d);
-                                        const u: Fv = .from(a[j1..][0..d]);
-                                        const v = Fv.from(a[j1 + t ..][0..d]).mul(.splat(s));
-                                        a[j1..][0..d].* = u.add(v).to();
-                                        a[j1 + t ..][0..d].* = u.sub(v).to();
-                                    },
-                                    Complex => for (0..distance) |b| {
-                                        const u = a[j1 + b];
-                                        const v = a[j1 + b + t].mul(s);
-                                        a[j1 + b] = u.add(v);
-                                        a[j1 + b + t] = u.sub(v);
-                                    },
-                                    else => unreachable,
+                                inline 512, 256, 128, 64, 32, 16, 8, 4, 2, 1 => |d| {
+                                    // We'll never hit the 512 element case in Falcon512.
+                                    if (N == 512 and d == 512) unreachable;
+
+                                    const Fv = T.Vector(d);
+                                    const u: Fv = .from(a[j1..][0..d]);
+                                    const v = Fv.from(a[j1 + t ..][0..d]).mul(.splat(s));
+                                    a[j1..][0..d].* = u.add(v).to();
+                                    a[j1 + t ..][0..d].* = u.sub(v).to();
                                 },
                                 else => unreachable,
                             }
@@ -441,8 +514,11 @@ fn Falcon(N: u32) type {
                             const s = T.precompute.negative[h + i];
                             const distance = (j2 + 1) - j1;
                             switch (distance) {
-                                inline 256, 128, 64, 32, 16, 8, 4, 2, 1 => |d| {
-                                    const Fv = Fq.Vector(d);
+                                inline 512, 256, 128, 64, 32, 16, 8, 4, 2, 1 => |d| {
+                                    // We'll never hit the 512 element case in Falcon512.
+                                    if (N == 512 and d == 512) unreachable;
+
+                                    const Fv = T.Vector(d);
                                     const u: Fv = .from(a[j1..][0..d]);
                                     const v: Fv = .from(a[j1 + t ..][0..d]);
                                     a[j1..][0..d].* = u.add(v).to();
@@ -560,7 +636,6 @@ fn Falcon(N: u32) type {
         pub fn hashToPoint(msg: []const u8, r: *const [40]u8) Polynomial(N, Fq) {
             const K = (1 << 16) / Q; // K <- ⌊2^16 / Q⌋
             const lanes = 16;
-            const V = @Vector(lanes, u32);
 
             var state: Shake256 = .init(.{});
             state.update(r);
@@ -588,24 +663,25 @@ fn Falcon(N: u32) type {
                     // where the performance of vpcompressd isn't hundreds of cycles (like it is on Zen 4).
                     builtin.cpu.model != &std.Target.x86.cpu.znver4)
                 {
-                    const Kv: V = @splat(K * Q);
+                    const V = @Vector(lanes, u32);
                     const Fv = Fq.Vector(lanes);
-
-                    const S = struct {
-                        const Mask = std.meta.Int(.unsigned, lanes);
-                        extern fn @"llvm.x86.avx512.mask.compress.d.512"(V, V, Mask) V;
-                        const compress = @"llvm.x86.avx512.mask.compress.d.512";
-                    };
+                    const Mask = std.meta.Int(.unsigned, lanes);
+                    const Kv: V = @splat(K * Q);
 
                     var batch: V = undefined;
                     inline for (0..lanes) |j| {
                         const idx = offset + j * 2;
                         batch[j] = (@as(u32, sample[idx]) << 8) | sample[idx + 1];
                     }
-                    offset += lanes * 2;
-                    const mask: S.Mask = @bitCast(batch < Kv);
-                    const compressed = S.compress(batch, @splat(0), mask);
+
+                    const mask: Mask = @bitCast(batch < Kv);
+                    const compressed = asm ("vpcompressd %[dst], %[src] {%[k]} {z}"
+                        : [dst] "=v" (-> V),
+                        : [src] "v" (batch),
+                          [k] "^Yk" (mask),
+                    );
                     coeffs[i..][0..lanes].* = @bitCast(Fv.init(@intCast(compressed % Fv.Ql)));
+                    offset += lanes * 2;
                     i += @popCount(mask);
                 } else {
                     const t = (@as(u32, sample[offset]) << 8) | sample[offset + 1];
