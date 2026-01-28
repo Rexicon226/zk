@@ -485,17 +485,9 @@ fn Falcon(N: u32) type {
         /// sensitive message. The downside of this approach is that it
         /// introduces a significant cost to verification performance.
         pub fn hashToPoint(msg: []const u8, r: *const [40]u8) Polynomial(N, Fq) {
-            // K <- ⌊2^16 / Q⌋
-            const K = (1 << 16) / Q;
-            const S = struct {
-                const lanes = 16;
-
-                const Mask = std.meta.Int(.unsigned, lanes);
-                const V = @Vector(lanes, u32);
-
-                extern fn @"llvm.x86.avx512.mask.compress.d.512"(V, V, Mask) V;
-                const compress = @"llvm.x86.avx512.mask.compress.d.512";
-            };
+            const K = (1 << 16) / Q; // K <- ⌊2^16 / Q⌋
+            const lanes = 16;
+            const V = @Vector(lanes, u32);
 
             var state: Shake256 = .init(.{});
             state.update(r);
@@ -508,7 +500,7 @@ fn Falcon(N: u32) type {
 
             // Worst case is that we're at N - 1 elements filled, and we will
             // then keep resampling S.lanes elements until mask > 0.
-            var coeffs: [N + S.lanes]Fq = undefined;
+            var coeffs: [N + lanes]Fq = undefined;
             var i: u32 = 0;
             while (i < N) {
                 if (offset >= sample.len) {
@@ -518,22 +510,29 @@ fn Falcon(N: u32) type {
 
                 if (comptime builtin.zig_backend == .stage2_llvm and
                     builtin.cpu.arch == .x86_64 and
+                    builtin.cpu.has(.x86, .avx512f) and
                     // It only makes sense to use the vpcompress strategy on targets like Zen 5
                     // where the performance of vpcompressd isn't hundreds of cycles (like it is on Zen 4).
-                    builtin.cpu.model == &std.Target.x86.cpu.znver5)
+                    builtin.cpu.model != &std.Target.x86.cpu.znver4)
                 {
-                    const Kv: S.V = @splat(K * Q);
-                    const Fv = Fq.Vector(S.lanes);
+                    const Kv: V = @splat(K * Q);
+                    const Fv = Fq.Vector(lanes);
 
-                    var batch: S.V = undefined;
-                    inline for (0..S.lanes) |j| {
+                    const S = struct {
+                        const Mask = std.meta.Int(.unsigned, lanes);
+                        extern fn @"llvm.x86.avx512.mask.compress.d.512"(V, V, Mask) V;
+                        const compress = @"llvm.x86.avx512.mask.compress.d.512";
+                    };
+
+                    var batch: V = undefined;
+                    inline for (0..lanes) |j| {
                         const idx = offset + j * 2;
                         batch[j] = (@as(u32, sample[idx]) << 8) | sample[idx + 1];
                     }
-                    offset += S.lanes * 2;
+                    offset += lanes * 2;
                     const mask: S.Mask = @bitCast(batch < Kv);
                     const compressed = S.compress(batch, @splat(0), mask);
-                    coeffs[i..][0..S.lanes].* = @bitCast(Fv.init(@intCast(compressed % Fv.Ql)));
+                    coeffs[i..][0..lanes].* = @bitCast(Fv.init(@intCast(compressed % Fv.Ql)));
                     i += @popCount(mask);
                 } else {
                     const t = (@as(u32, sample[offset]) << 8) | sample[offset + 1];
