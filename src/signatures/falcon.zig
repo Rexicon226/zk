@@ -136,7 +136,7 @@ fn Falcon(N: u32) type {
                 const negative = precompute.powers(inv(psi));
                 const ninv: Fq = .init(inv(N));
 
-                /// A primative 2N-th root of unity in $\mathbb{Z}_q$.
+                /// A primitive 2N-th root of unity in $\mathbb{Z}_q$.
                 const psi = psi: {
                     const exp = (Q - 1) / (2 * N);
                     for (1..Q) |i| {
@@ -144,7 +144,7 @@ fn Falcon(N: u32) type {
                         const g2 = powmod(g, N);
                         if (g2 != 1) break :psi g;
                     }
-                    @compileError("no primative 2N-th root of unity!");
+                    @compileError("no primitive 2N-th root of unity!");
                 };
 
                 fn reverse(x: T) T {
@@ -284,13 +284,13 @@ fn Falcon(N: u32) type {
 
             /// Precomputes the powers of $\psi$ in the complex space.
             ///
-            /// A nice property of computing primative roots in $\mathbb{C}$
+            /// A nice property of computing primitive roots in $\mathbb{C}$
             /// is that instead of needing to search for it, like we did in the
             /// finite field version, we get it for free in:
             /// $\psi = e^{\frac{i\pi}{N}}$
             ///
             /// We find the powers of $\psi$ with Euler's Formula:
-            /// $$\psi^k = cos(\frac{\pi k}{N}) + i sin(\frac{\pi k}{N})$$
+            /// $$\psi^k = \cos\left(\frac{\pi k}{N}\right) + i \sin\left(\frac{\pi k}{N}\right)$$
             ///
             /// Remember that the n-th root of unity is a complex number $\omega$
             /// such that:
@@ -299,7 +299,7 @@ fn Falcon(N: u32) type {
             /// All such roots are:
             /// $$\omega_k = e^{\frac{2\pi i k}{n}}, k = 0,1,\ldots,n - 1$$
             ///
-            /// A primative n-th root is one whose powers generate all n roots.
+            /// A primitive n-th root is one whose powers generate all n roots.
             /// We usually pick:
             /// $\omega = e^{\frac{2\pi i}{N}}$
             ///
