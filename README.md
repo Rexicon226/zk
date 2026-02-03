@@ -20,5 +20,5 @@ Some notable implementations:
 - Pedersen Commitments
 - Many sigma-protocols based off of Pedersen commitments
 - Bulletproofs implementation
-- Falcon 512 signature verification
+- Falcon-{512,1024} signature verification (no signing, yet)
 - (Non-linkable) Ring signature demo, similar to [Triptych construction](https://eprint.iacr.org/2020/018.pdf)
